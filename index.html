@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>Chow Sim iOS 26</title>
+    <title>Chow Sim iOS 26 - Ultimate Edition</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         ::-webkit-scrollbar { display: none; }
@@ -20,232 +20,204 @@
             padding: 0;
             padding-bottom: env(safe-area-inset-bottom);
         }
-        input { -webkit-user-select: text; user-select: text; }
+        input { -webkit-user-select: text; user-select: text; outline: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        @keyframes pulse-slow {
-            0%, 100% { opacity: 1; transform: rotate(12deg) scale(1); }
-            50% { opacity: 0.8; transform: rotate(12deg) scale(0.98); }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
         }
-        .animate-pulse-slow { animation: pulse-slow 3s infinite ease-in-out; }
-        .app-icon-shadow { box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        .animate-float { animation: float 4s infinite ease-in-out; }
+        .glass { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .ios-shadow { box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.5); }
+        .app-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
     </style>
 </head>
 <body>
     <div id="root"></div>
     <script type="module">
-        import React, { useState, useEffect } from 'https://esm.sh/react@18.2.0';
+        import React, { useState, useEffect, useRef } from 'https://esm.sh/react@18.2.0';
         import ReactDOM from 'https://esm.sh/react-dom@18.2.0/client';
         import htm from 'https://esm.sh/htm';
         import * as Lucide from 'https://esm.sh/lucide-react@0.263.1';
+        import { GoogleGenAI } from "@google/genai";
 
         const html = htm.bind(React.createElement);
 
-        // --- GAME DATA ---
-        
-        const CHAIN_COLORS = {
-            copper: '#b87333', coal: '#2c2c2c', silver: '#e4e4e7', gold: '#fbbf24',
+        // --- GAME CONSTANTS & EXPANDED DATA ---
+
+        const COLORS = {
+            copper: '#b87333', coal: '#1a1a1a', silver: '#e4e4e7', gold: '#fbbf24',
             platinum: '#e0f2fe', emerald: '#10b981', ruby: '#ef4444', sapphire: '#3b82f6',
-            amethyst: '#a855f7', diamond: '#b9f2ff', obsidian: '#09090b',
-            rainbow: 'linear-gradient(45deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3)'
+            amethyst: '#a855f7', diamond: '#b9f2ff', obsidian: '#050505',
+            rainbow: 'linear-gradient(45deg, #ff0000, #ffff00, #00ff00, #0000ff, #9400d3)'
         };
 
-        const SUBJECTS = [
-            'math', 'science', 'art', 'history', 'geography', 'physics', 
-            'chemistry', 'biology', 'computing', 'english', 'business', 'music'
-        ];
+        const PHONES = Array.from({ length: 21 }, (_, i) => ({
+            id: `ip-${i}`,
+            name: i === 0 ? "Nokia Brick" : `iPhone ${i + 1} Pro`,
+            price: 50 + (i * 250),
+            brand: 'Apple'
+        }));
 
-        const JOBS = [
-            { id: 'beggar', title: 'Beggar', salary: 10, minAge: 6 },
-            { id: 'paper', title: 'Paper Round', salary: 30, minAge: 10 },
-            { id: 'burger', title: 'Burger Flipper', salary: 80, minAge: 14 },
-            { id: 'sales', title: 'Retail Assistant', salary: 200, minAge: 16, reqSubject: 'math', reqLevel: 20 },
-            { id: 'barista', title: 'Barista', salary: 250, minAge: 16, reqSubject: 'english', reqLevel: 20 },
-            { id: 'artist', title: 'Graphic Artist', salary: 400, minAge: 18, reqSubject: 'art', reqLevel: 60 },
-            { id: 'lab', title: 'Lab Technician', salary: 450, minAge: 18, reqSubject: 'science', reqLevel: 60 },
-            { id: 'author', title: 'Author', salary: 600, minAge: 18, reqSubject: 'english', reqLevel: 100 },
-            { id: 'musician', title: 'Musician', salary: 700, minAge: 18, reqSubject: 'music', reqLevel: 100 },
-            { id: 'engineer', title: 'Engineer', salary: 800, minAge: 21, reqSubject: 'physics', reqLevel: 100 },
-            { id: 'pharm', title: 'Pharmacist', salary: 850, minAge: 21, reqSubject: 'chemistry', reqLevel: 100 },
-            { id: 'math', title: 'Mathematician', salary: 900, minAge: 22, reqSubject: 'math', reqLevel: 120 },
-            { id: 'dev', title: 'Senior Developer', salary: 1200, minAge: 21, reqSubject: 'computing', reqLevel: 100 },
-            { id: 'pilot', title: 'Airline Pilot', salary: 1400, minAge: 24, reqSubject: 'geography', reqLevel: 100 },
-            { id: 'doc', title: 'Surgeon', salary: 1800, minAge: 26, reqSubject: 'biology', reqLevel: 120 },
-            { id: 'lawyer', title: 'Lawyer', salary: 2000, minAge: 26, reqSubject: 'history', reqLevel: 120 },
-            { id: 'ceo', title: 'CEO', salary: 3500, minAge: 30, reqSubject: 'business', reqLevel: 120 },
-        ];
-
-        const PHONES = [
-            { name: "Nokia Brick", price: 50, model: '1' },
-            { name: "iPhone 2G", price: 100, model: '1' },
-            { name: "iPhone 3G", price: 150, model: '1' },
-            { name: "iPhone 4", price: 200, model: '1' },
-            { name: "iPhone 5", price: 300, model: '6' },
-            { name: "iPhone 6", price: 400, model: '6' },
-            { name: "Samsung S8", price: 450, model: 's20' },
-            { name: "iPhone 8 Plus", price: 500, model: '8' },
-            { name: "iPhone X", price: 600, model: 'X' },
-            { name: "Samsung S20", price: 700, model: 's20' },
-            { name: "iPhone 11", price: 800, model: '11' },
-            { name: "iPhone 12 Pro", price: 900, model: '12' },
-            { name: "iPhone 13 Pro", price: 1000, model: '12' },
-            { name: "Samsung S22 Ultra", price: 1100, model: 's20' },
-            { name: "iPhone 14 Pro Max", price: 1200, model: '15' },
-            { name: "iPhone 15 Pro Max", price: 1400, model: '15' },
-            { name: "Samsung S24 Ultra", price: 1500, model: 's24' },
-            { name: "iPhone 16 Pro Max", price: 1800, model: '15' },
-            { name: "Samsung S25 Ultra", price: 2200, model: 's26_ultra' },
-            { name: "iPhone 17 Pro Max", price: 2800, model: '17_pro_max' },
-            { name: "iPhone 18 Ultra", price: 5000, model: '18_pro_max' },
-        ];
+        const SAMSUNGS = Array.from({ length: 10 }, (_, i) => ({
+            id: `ss-${i}`,
+            name: `Samsung S${20 + i} Ultra`,
+            price: 500 + (i * 300),
+            brand: 'Samsung'
+        }));
 
         const CARS = [
             { name: "Bicycle", price: 100, color: "#555" },
+            { name: "Skateboard", price: 50, color: "#333" },
             { name: "Rusty Sedan", price: 500, color: "#8B4513" },
-            { name: "Toyota Camry", price: 25000, color: "#C0C0C0" },
-            { name: "Honda Civic Type R", price: 40000, color: "#ff0000" },
-            { name: "BMW M3", price: 60000, color: "#222" },
-            { name: "Tesla Model S", price: 90000, color: "#fff" },
+            { name: "Old Moped", price: 800, color: "#facc15" },
+            { name: "Toyota Camry", price: 15000, color: "#C0C0C0" },
+            { name: "Honda Civic", price: 20000, color: "#fff" },
+            { name: "Ford Mustang", price: 35000, color: "#ef4444" },
+            { name: "BMW 3 Series", price: 45000, color: "#111" },
+            { name: "Audi A6", price: 55000, color: "#3b82f6" },
+            { name: "Tesla Model 3", price: 40000, color: "#fff" },
+            { name: "Range Rover", price: 90000, color: "#065f46" },
             { name: "Porsche 911", price: 120000, color: "#facc15" },
-            { name: "Mercedes G-Wagon", price: 180000, color: "#111" },
-            { name: "Lamborghini Huracan", price: 250000, color: "#facc15" },
-            { name: "Ferrari F8", price: 300000, color: "#ef4444" },
-            { name: "Rolls Royce Phantom", price: 500000, color: "#000" },
-            { name: "Bugatti Chiron", price: 3000000, color: "#3b82f6" },
+            { name: "Mercedes S-Class", price: 110000, color: "#000" },
+            { name: "Nissan GT-R", price: 115000, color: "#444" },
+            { name: "Lamborghini Huracan", price: 250000, color: "#fbbf24" },
+            { name: "Ferrari 488", price: 280000, color: "#dc2626" },
+            { name: "McLaren 720S", price: 300000, color: "#ea580c" },
+            { name: "Aston Martin DB11", price: 220000, color: "#1e293b" },
+            { name: "Rolls Royce Cullinan", price: 450000, color: "#000" },
+            { name: "Bugatti Veyron", price: 1500000, color: "#1e3a8a" },
+            { name: "Private Jet", price: 15000000, color: "#fff" }
         ];
 
-        const HOUSES = [
-            { name: "Cardboard Box", price: 0, rent: 0, type: 'rented' },
-            { name: "Shared Room", price: 0, rent: 100, type: 'rented' },
-            { name: "Studio Apartment", price: 80000, rent: 400, type: 'owned' },
-            { name: "2-Bed Flat", price: 150000, rent: 800, type: 'owned' },
-            { name: "Suburban House", price: 350000, rent: 1500, type: 'owned' },
-            { name: "Penthouse Suite", price: 1000000, rent: 4000, type: 'owned' },
-            { name: "Beverly Hills Mansion", price: 5000000, rent: 15000, type: 'owned' },
-            { name: "Private Island", price: 50000000, rent: 0, type: 'owned' },
-        ];
+        const HOUSES = Array.from({ length: 21 }, (_, i) => ({
+            id: `h-${i}`,
+            name: i === 0 ? "Cardboard Box" : i < 5 ? `Apartment Block ${i}` : i < 15 ? `Suburban House ${i}` : `Palace Level ${i - 14}`,
+            price: i === 0 ? 0 : 5000 * Math.pow(2, i),
+            rent: i === 0 ? 0 : 50 * Math.pow(1.5, i)
+        }));
 
-        const ACTIVITIES = [
-            { id: 'gym', name: 'Go to Gym', cost: 20, happy: 5, health: 5, icon: Lucide.Dumbbell },
-            { id: 'library', name: 'Visit Library', cost: 0, happy: 2, health: 0, icon: Lucide.Book },
-            { id: 'club', name: 'Nightclub', cost: 100, happy: 15, health: -2, icon: Lucide.Music },
-            { id: 'concert', name: 'Concert', cost: 200, happy: 25, health: 0, icon: Lucide.Mic2 },
-            { id: 'vacation', name: 'Luxury Vacation', cost: 2000, happy: 50, health: 10, icon: Lucide.Plane },
-            { id: 'plastic', name: 'Plastic Surgery', cost: 5000, happy: 60, health: 0, icon: Lucide.Sparkles },
-        ];
+        const RINGS = Object.keys(COLORS).map(k => ({ name: `${k.charAt(0).toUpperCase() + k.slice(1)} Ring`, color: COLORS[k], price: 1500 }));
+        const CHAINS = Object.keys(COLORS).map(k => ({ name: `${k.charAt(0).toUpperCase() + k.slice(1)} Chain`, color: COLORS[k], price: 3000 }));
 
-        const THEMES = [
-            { id: 'black', color: 'bg-black', text: 'Black' },
-            { id: 'white', color: 'bg-zinc-100', text: 'White' },
-            { id: 'grey', color: 'bg-zinc-800', text: 'Grey' },
-            { id: 'blue', color: 'bg-blue-900', text: 'Blue' },
-            { id: 'green', color: 'bg-green-950', text: 'Green' },
+        const SUBJECTS = [
+            'Maths', 'Physics', 'Biology', 'Chemistry', 'Art', 'Music', 'History', 'Geography', 'Computing', 'Business', 'Philosophy', 'Law'
         ];
 
         const INITIAL_STATE = {
-            hasStarted: false, name: "Player", gender: 'male', money: 500, age: 11, week: 1,
-            health: 100, happiness: 100, jail: 0, themeColor: 'black', job: null, jobSalary: 0,
-            education: { primary: 0, secondary: 0, math: 0, science: 0, art: 0, history: 0, geography: 0, physics: 0, chemistry: 0, biology: 0, computing: 0, english: 0, business: 0, music: 0 },
-            assets: { house: { name: "Parents' House", type: 'family', cost: 0, rent: 0 }, car: null, chain: null, phone: null },
+            hasStarted: false,
+            name: "New Citizen",
+            gender: 'male',
+            money: 500,
+            age: 12,
+            week: 1,
+            health: 100,
+            happiness: 100,
+            jail: 0,
+            education: {
+                primary: 0,
+                secondary: 0,
+                subjects: SUBJECTS.reduce((acc, s) => ({ ...acc, [s]: 0 }), {})
+            },
+            assets: {
+                house: HOUSES[0],
+                car: null,
+                chain: null,
+                ring: null,
+                phone: null
+            },
             chowtok: { followers: 0, likes: 0 },
-            logs: [{ id: 'init', message: "Welcome to Life Sim iOS 26.", week: 1, type: 'success' }]
+            isDead: false,
+            logs: []
         };
 
-        // --- UI COMPONENTS ---
-        
+        // --- UTILITY COMPONENTS ---
+
         const ProgressBar = ({ value, max, color }) => html`
-            <div className="h-2 bg-zinc-800 rounded-full overflow-hidden w-full shadow-inner">
+            <div className="h-2 bg-zinc-800 rounded-full overflow-hidden w-full">
                 <div className="h-full transition-all duration-500" style=${{ width: `${Math.min(100, (value / max) * 100)}%`, backgroundColor: color }} />
             </div>
         `;
 
-        const ActionButton = ({ label, subLabel, cost, costColor = 'neutral', icon: Icon, onClick, variant = 'default', className = '', disabled = false }) => {
-            const variants = {
-                default: "bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-white",
-                danger: "bg-red-900/20 border-red-900/50 text-red-100",
-                success: "bg-green-900/20 border-green-900/50 text-green-100",
-                accent: "bg-blue-900/20 border-blue-900/50 text-blue-100"
-            };
-            const cColors = { green: "text-emerald-400", red: "text-rose-400", neutral: "text-zinc-400" };
+        const CharacterVisual = ({ state, large = false }) => {
+            const { gender, assets } = state;
+            const chainColor = assets.chain ? assets.chain.color : 'transparent';
+            const ringColor = assets.ring ? assets.ring.color : 'transparent';
+            const carColor = assets.car ? assets.car.color : 'transparent';
+
             return html`
-                <button onClick=${onClick} disabled=${disabled} className=${`w-full p-4 rounded-2xl border flex items-center justify-between active:scale-[0.98] transition-transform ${variants[variant]} ${className} ${disabled ? 'opacity-50 grayscale' : ''}`}>
-                    <div className="flex items-center gap-3 text-left">
-                        ${Icon && html`<${Icon} size=${20} className="text-zinc-500" />`}
-                        <div>
-                            <div className="font-bold text-sm">${label}</div>
-                            ${subLabel && html`<div className="text-[10px] text-zinc-500 uppercase font-black tracking-widest">${subLabel}</div>`}
+                <div className=${`relative flex flex-col items-center justify-center ${large ? 'scale-150 py-20' : 'scale-100 py-10'}`}>
+                    <!-- Car Background -->
+                    ${assets.car && html`
+                        <div className="absolute -z-10 opacity-30 blur-sm translate-y-4">
+                            <svg width="200" height="100" viewBox="0 0 200 100">
+                                <path d="M20 70 L40 40 L160 40 L180 70 L190 90 L10 90 Z" fill=${carColor} />
+                                <circle cx="50" cy="85" r="12" fill="#111" />
+                                <circle cx="150" cy="85" r="12" fill="#111" />
+                            </svg>
+                        </div>
+                    `}
+                    
+                    <!-- Character Body -->
+                    <div className="relative">
+                        <!-- Head -->
+                        <div className="w-16 h-16 bg-[#ffdbac] rounded-full relative z-20 overflow-hidden shadow-inner">
+                             ${gender === 'female' ? html`<div className="absolute top-0 w-full h-8 bg-[#3e2723] rounded-t-full" />` : html`<div className="absolute top-0 w-full h-2 bg-[#2d1a12] rounded-t-full" />`}
+                             <!-- Eyes -->
+                             <div className="flex justify-around mt-6 px-3">
+                                <div className="w-2 h-2 bg-black rounded-full" />
+                                <div className="w-2 h-2 bg-black rounded-full" />
+                             </div>
+                        </div>
+                        
+                        <!-- Neck / Chain -->
+                        <div className="w-4 h-2 bg-[#ffdbac] mx-auto relative z-10">
+                            ${assets.chain && html`<div className="absolute top-0 left-[-4px] right-[-4px] h-2 rounded-full border-b-2" style=${{ borderColor: chainColor }} />`}
+                        </div>
+
+                        <!-- Torso -->
+                        <div className="w-20 h-24 bg-zinc-100 rounded-t-2xl relative z-10">
+                            <!-- Arms -->
+                            <div className="absolute -left-6 top-2 w-6 h-16 bg-[#ffdbac] rounded-full origin-top rotate-[15deg] flex items-end justify-center">
+                                ${assets.ring && html`<div className="w-3 h-1 rounded-full mb-2" style=${{ backgroundColor: ringColor }} />`}
+                            </div>
+                            <div className="absolute -right-6 top-2 w-6 h-16 bg-[#ffdbac] rounded-full origin-top -rotate-[15deg] flex items-end justify-center">
+                                <!-- Holding Phone -->
+                                ${assets.phone && html`
+                                    <div className="w-8 h-12 bg-black rounded-lg border border-zinc-700 shadow-xl flex items-center justify-center -rotate-12 mb-2">
+                                        <div className="w-1 h-1 bg-zinc-600 rounded-full mb-8" />
+                                    </div>
+                                `}
+                            </div>
                         </div>
                     </div>
-                    ${cost !== undefined && html`<div className=${`font-black text-xs ${cColors[costColor]}`}>${typeof cost === 'number' ? `£${cost.toLocaleString()}` : cost}</div>`}
-                </button>
-            `;
-        };
-
-        const AppIcon = ({ icon: Icon, label, color, onClick }) => html`
-            <button onClick=${onClick} className="flex flex-col items-center gap-2 group active:scale-90 transition-all duration-200">
-                <div className=${`w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg app-icon-shadow ${color}`}>
-                    <${Icon} size=${28} strokeWidth=${2} />
-                </div>
-                <span className="text-[10px] font-medium text-zinc-300 group-hover:text-white transition-colors">${label}</span>
-            </button>
-        `;
-
-        const CharacterVisual = ({ chain, phone, gender }) => {
-            const chainStyle = chain ? CHAIN_COLORS[chain] : 'transparent';
-            return html`
-                <div className="relative w-24 h-24 flex flex-col items-center justify-end">
-                    <div className="w-10 h-10 bg-[#ffdbac] rounded-full z-10 shadow-sm relative">
-                        ${gender === 'female' && html`<div className="absolute -top-1 -left-1 -right-1 h-12 bg-[#3e2723] rounded-t-full -z-10" />`}
-                        ${gender === 'male' && html`<div className="absolute -top-1 left-0 right-0 h-3 bg-[#3e2723] rounded-t-full" />`}
-                    </div>
-                    <div className="w-14 h-16 bg-zinc-200 rounded-t-xl -mt-2 relative flex justify-center">
-                        ${chain && html`<div className="absolute top-0 w-8 h-5 rounded-b-full border-b-[3px]" style=${{ borderColor: chainStyle, borderStyle: 'solid' }} />`}
-                        ${phone && html`
-                            <div className="absolute -right-6 top-4 animate-pulse-slow">
-                                <div className="w-6 h-10 bg-zinc-800 rounded-lg border border-zinc-600 shadow-xl rotate-12 flex items-center justify-center">
-                                    <div className="w-1 h-1 bg-zinc-500 rounded-full mb-4" />
-                                </div>
-                            </div>
-                        `}
-                    </div>
                 </div>
             `;
         };
 
-        const CarVisual = ({ car }) => {
-            if (!car) return null;
-            return html`
-                <div className="w-full flex justify-center py-4">
-                    <svg viewBox="0 0 200 100" className="w-64 h-32 drop-shadow-2xl">
-                        <path d="M20 60 L40 40 L140 38 L180 50 L190 75 L10 75 Z" fill=${car.color} />
-                        <rect x="45" y="42" width="30" height="15" fill="#a5f3fc" fillOpacity="0.5" />
-                        <rect x="85" y="40" width="45" height="16" fill="#a5f3fc" fillOpacity="0.5" />
-                        <circle cx="45" cy="80" r="14" fill="#111" />
-                        <circle cx="155" cy="80" r="14" fill="#111" />
-                    </svg>
-                </div>
-            `;
-        };
+        // --- MAIN APP ---
 
-        // --- APP LOGIC ---
-        
         function App() {
             const [state, setState] = useState(() => {
-                try {
-                    const saved = localStorage.getItem('lifeSimState_v5');
-                    return saved ? JSON.parse(saved) : INITIAL_STATE;
-                } catch(e) {
-                    return INITIAL_STATE;
-                }
+                const saved = localStorage.getItem('chow_sim_v26');
+                return saved ? JSON.parse(saved) : INITIAL_STATE;
             });
             const [view, setView] = useState('home'); 
-            const [storeTab, setStoreTab] = useState('goods'); 
-            const [showSettings, setShowSettings] = useState(false);
-            const [thiefTab, setThiefTab] = useState('phones');
+            const [shopTab, setShopTab] = useState('phones');
+            const [phoneApp, setPhoneApp] = useState(null);
+            const [aiQuery, setAiQuery] = useState('');
+            const [aiResponse, setAiResponse] = useState('');
+            const [isAiLoading, setIsAiLoading] = useState(false);
 
-            useEffect(() => localStorage.setItem('lifeSimState_v5', JSON.stringify(state)), [state]);
+            useEffect(() => {
+                localStorage.setItem('chow_sim_v26', JSON.stringify(state));
+                if (state.health <= 0 || state.happiness <= 0) {
+                    setState(p => ({ ...p, isDead: true }));
+                }
+            }, [state]);
 
-            const addLog = (msg, type = 'neutral') => {
-                setState(p => ({ ...p, logs: [{ id: Math.random().toString(), message: msg, week: p.week, type }, ...p.logs].slice(0, 30) }));
+            const log = (msg, type = 'info') => {
+                setState(p => ({ ...p, logs: [{ id: Date.now(), msg, type }, ...p.logs].slice(0, 5) }));
             };
 
             const tick = () => {
@@ -253,446 +225,452 @@
                     const nextWeek = prev.week + 1;
                     const nextAge = nextWeek > 52 ? prev.age + 1 : prev.age;
                     const displayWeek = nextWeek > 52 ? 1 : nextWeek;
-                    
-                    if (prev.jail > 0) return { ...prev, jail: prev.jail - 1, week: displayWeek, age: nextAge, happiness: Math.max(0, prev.happiness - 3) };
-                    
-                    let income = (prev.age >= 11 && prev.age < 18 ? 20 : 0) + (prev.jobSalary || 0);
-                    let expenses = 0;
-                    if (prev.assets.house.rent) expenses += prev.assets.house.rent;
-                    
-                    const newHealth = Math.max(0, prev.health - (prev.age > 50 ? 2 : 0));
-                    const newHappy = Math.max(0, prev.happiness - 1);
-
-                    return { 
-                        ...prev, 
-                        week: displayWeek, 
-                        age: nextAge, 
-                        money: prev.money + income - expenses,
-                        health: newHealth,
-                        happiness: newHappy
+                    return {
+                        ...prev,
+                        week: displayWeek,
+                        age: nextAge,
+                        money: prev.money + (prev.age > 18 ? 200 : 20), // Basic allowance
+                        health: Math.max(0, prev.health - (prev.age > 50 ? 2 : 1)),
+                        happiness: Math.max(0, prev.happiness - 1)
                     };
                 });
             };
 
-            const study = (sub) => {
-                const isBasic = sub === 'primary' || sub === 'secondary';
-                if (sub === 'secondary' && state.education.primary < 60) return addLog("Complete primary first", 'danger');
-                if (!isBasic && state.education.secondary < 60) return addLog("Graduate high school first", 'danger');
-                const cost = isBasic ? 0 : 10;
-                if (state.money < cost) return addLog("No money", 'danger');
-                
-                setState(p => ({ ...p, money: p.money - cost, education: { ...p.education, [sub]: Math.min(120, p.education[sub] + 2) }, happiness: Math.max(0, p.happiness - 1) }));
+            // Education Logic
+            const doEducation = (type, sub = null) => {
+                if (state.money < (type === 'subject' ? 10 : 0)) return log("Not enough money!", "error");
+
+                setState(prev => {
+                    let cost = 0;
+                    let hMod = 0;
+                    let hpMod = 0;
+                    let mMod = 0;
+                    let nextEdu = { ...prev.education };
+
+                    if (type === 'primary') {
+                        if (prev.education.primary >= 60) return prev;
+                        nextEdu.primary += 1;
+                        mMod = 10; hpMod = 2; hMod = 2;
+                    } else if (type === 'secondary') {
+                        if (prev.education.primary < 60) { log("Need primary first!"); return prev; }
+                        if (prev.education.secondary >= 60) return prev;
+                        nextEdu.secondary += 1;
+                        mMod = 10; hpMod = 2; hMod = 2;
+                    } else if (type === 'subject') {
+                        if (prev.education.secondary < 60) { log("Need high school graduation!"); return prev; }
+                        nextEdu.subjects[sub] = (nextEdu.subjects[sub] || 0) + 1;
+                        cost = 10; hpMod = -2; hMod = -2;
+                    }
+
+                    return {
+                        ...prev,
+                        money: prev.money + mMod - cost,
+                        health: Math.min(100, Math.max(0, prev.health + hMod)),
+                        happiness: Math.min(100, Math.max(0, prev.happiness + hpMod)),
+                        education: nextEdu
+                    };
+                });
             };
 
-            const steal = (type, item) => {
-                const chance = item.price <= 200 ? 95 : item.price <= 1000 ? 80 : item.price <= 50000 ? 50 : 15;
-                if (Math.random() * 100 < chance) {
-                    setState(p => ({ ...p, assets: { ...p.assets, [type]: type === 'house' ? { ...item, type: 'owned', cost: item.price, rent: 0 } : item }, happiness: 100 }));
-                    addLog(`Successfully stole ${item.name}`, 'success');
-                } else {
-                    setState(p => ({ ...p, jail: 12, job: null, jobSalary: 0, happiness: 0 }));
-                    addLog("Caught! Sent to prison for 12 weeks", 'danger');
+            const buyItem = (category, item) => {
+                if (state.money < item.price) return log("Too expensive!", "error");
+                setState(prev => ({
+                    ...prev,
+                    money: prev.money - item.price,
+                    assets: { ...prev.assets, [category]: item },
+                    happiness: Math.min(100, prev.happiness + 10)
+                }));
+                log(`Bought ${item.name}!`);
+            };
+
+            // AI Logic
+            const askChowAi = async () => {
+                if (!aiQuery) return;
+                setIsAiLoading(true);
+                setAiResponse("Thinking...");
+                try {
+                    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+                    const response = await ai.models.generateContent({
+                        model: 'gemini-3-flash-preview',
+                        contents: aiQuery,
+                        config: { systemInstruction: "You are Chow AI, a helpful virtual assistant in a life simulator game. Be concise." }
+                    });
+                    setAiResponse(response.text);
+                } catch (err) {
+                    setAiResponse("Error connecting to neural link.");
                 }
+                setIsAiLoading(false);
             };
 
-            const buy = (category, item) => {
-                if (state.money < item.price) return addLog("Insufficient funds", 'danger');
-                setState(p => ({ 
-                    ...p, 
-                    money: p.money - item.price, 
-                    assets: { ...p.assets, [category]: category === 'house' ? { ...item, type: 'owned', cost: item.price, rent: 0 } : item },
-                    happiness: Math.min(100, p.happiness + 10)
-                }));
-                addLog(`Purchased ${item.name}`, 'success');
-            };
+            // --- RENDER VIEWS ---
 
-            const rentHouse = (item) => {
-                if (state.money < item.rent * 4) return addLog("Need 4 weeks rent upfront", 'danger');
-                setState(p => ({
-                    ...p,
-                    assets: { ...p.assets, house: { ...item, type: 'rented' } },
-                    happiness: Math.min(100, p.happiness + 5)
-                }));
-                addLog(`Rented ${item.name}`, 'success');
-            };
-
-            const doActivity = (act) => {
-                if (state.money < act.cost) return addLog("Too expensive", 'danger');
-                setState(p => ({
-                    ...p,
-                    money: p.money - act.cost,
-                    happiness: Math.min(100, p.happiness + act.happy),
-                    health: Math.min(100, p.health + act.health)
-                }));
-                addLog(act.name, 'success');
-            };
-
-            const applyJob = (j) => {
-                if (state.age < j.minAge) return addLog("Too young", 'danger');
-                if (j.reqSubject && state.education[j.reqSubject] < j.reqLevel) return addLog(`Need ${j.reqSubject} level ${j.reqLevel}`, 'danger');
-                setState(p => ({ ...p, job: j.title, jobSalary: j.salary }));
-                addLog(`Started working as ${j.title}`, 'success');
-            };
-
-            const getTheftChance = (price) => price <= 200 ? 95 : price <= 1000 ? 80 : price <= 50000 ? 50 : 15;
-
-            // --- VIEW RENDER ---
+            if (state.isDead) {
+                return html`
+                    <div className="min-h-screen bg-red-950 flex flex-col items-center justify-center p-10 text-center">
+                        <${Lucide.Skull} size=${80} className="mb-6 animate-bounce" />
+                        <h1 className="text-6xl font-black mb-4 uppercase tracking-tighter">Wasted</h1>
+                        <p className="text-xl mb-10 opacity-70">Life comes to an end eventually. Try better next time.</p>
+                        <button onClick=${() => { localStorage.removeItem('chow_sim_v26'); window.location.reload(); }} className="bg-white text-black px-10 py-5 rounded-full font-black text-xl shadow-2xl">NEW LIFE</button>
+                    </div>
+                `;
+            }
 
             if (!state.hasStarted) {
                 return html`
-                    <div className="min-h-screen bg-black flex items-center justify-center p-6">
-                        <div className="w-full max-w-md bg-zinc-900 p-8 rounded-[40px] border border-white/5 shadow-2xl">
-                            <h1 className="text-3xl font-black mb-8 text-center bg-gradient-to-b from-white to-zinc-600 bg-clip-text text-transparent">Chow Sim iOS 26</h1>
-                            <input placeholder="Enter Name" className="w-full bg-black border border-white/10 p-5 rounded-2xl mb-4 outline-none text-white font-bold" value=${state.name} onChange=${e => setState(p => ({...p, name: e.target.value}))} />
+                    <div className="min-h-screen bg-black flex flex-col items-center justify-center p-8">
+                        <div className="w-full max-w-sm glass p-8 rounded-[40px] text-center ios-shadow">
+                            <h1 className="text-4xl font-black mb-2 tracking-tighter">CHOW SIM</h1>
+                            <p className="text-xs font-bold uppercase tracking-widest opacity-40 mb-8">iOS 26 Ultimate</p>
+                            <input className="w-full bg-white/10 p-5 rounded-2xl mb-4 font-bold" placeholder="Your Name" value=${state.name} onChange=${e => setState(p => ({...p, name: e.target.value}))} />
                             <div className="grid grid-cols-2 gap-3 mb-8">
-                                ${['male', 'female'].map(g => html`
-                                    <button key=${g} onClick=${() => setState(p => ({...p, gender: g}))} className=${`p-4 rounded-2xl font-bold capitalize border-2 transition-all ${state.gender === g ? 'bg-white text-black border-white' : 'bg-transparent text-zinc-500 border-white/5'}`}>${g}</button>
-                                `)}
+                                <button className=${`p-4 rounded-2xl font-black ${state.gender === 'male' ? 'bg-white text-black' : 'bg-white/5'}`} onClick=${() => setState(p => ({...p, gender: 'male'}))}>MALE</button>
+                                <button className=${`p-4 rounded-2xl font-black ${state.gender === 'female' ? 'bg-white text-black' : 'bg-white/5'}`} onClick=${() => setState(p => ({...p, gender: 'female'}))}>FEMALE</button>
                             </div>
-                            <button onClick=${() => setState(p => ({...p, hasStarted: true}))} className="w-full bg-white text-black font-black py-5 rounded-2xl text-xl shadow-lg shadow-white/10">Begin New Life</button>
+                            <button className="w-full bg-blue-600 p-5 rounded-2xl font-black text-xl" onClick=${() => setState(p => ({...p, hasStarted: true}))}>START LIFE</button>
                         </div>
                     </div>
                 `;
             }
-
-            if (state.jail > 0) {
-                return html`
-                    <div className="min-h-screen bg-black flex flex-col items-center justify-center p-8 text-center">
-                        <${Lucide.Lock} size=${80} className="text-red-600 mb-6" />
-                        <h1 className="text-5xl font-black text-white mb-2 uppercase tracking-tighter">Prison</h1>
-                        <p className="text-zinc-500 font-bold mb-10">Time remaining: ${state.jail} weeks</p>
-                        <button onClick=${tick} className="w-full max-w-xs bg-zinc-900 text-white font-black py-5 rounded-3xl hover:bg-zinc-800 border border-white/5">Wait One Week</button>
-                    </div>
-                `;
-            }
-
-            if (state.health <= 0) {
-                return html`
-                    <div className="min-h-screen bg-black flex flex-col items-center justify-center p-8 text-center">
-                        <${Lucide.Skull} size=${80} className="text-red-600 mb-6" />
-                        <h1 className="text-5xl font-black text-white mb-2 uppercase tracking-tighter">Wasted</h1>
-                        <p className="text-zinc-500 font-bold mb-10">You didn't look after yourself.</p>
-                        <button onClick=${() => {localStorage.removeItem('lifeSimState_v5'); window.location.reload();}} className="w-full max-w-xs bg-white text-black font-black py-5 rounded-3xl">New Life</button>
-                    </div>
-                `;
-            }
-
-            const bgStyles = { black: 'bg-black', white: 'bg-zinc-100', grey: 'bg-zinc-800', blue: 'bg-blue-900', green: 'bg-green-950' };
 
             return html`
-                <div className=${`min-h-screen transition-all duration-700 ${bgStyles[state.themeColor]} pb-32 select-none`}>
-                    <header className="sticky top-0 z-50 backdrop-blur-3xl border-b border-white/5 p-5 pt-12 bg-black/40">
-                        <div className="flex justify-between items-center mb-4">
-                            <h1 className="font-black text-2xl tracking-tighter">${state.name}</h1>
-                            <button onClick=${() => setShowSettings(true)} className="p-2 rounded-full bg-zinc-900/50"><${Lucide.Settings} size=${20}/></button>
-                        </div>
+                <div className="min-h-screen bg-black flex flex-col">
+                    <!-- Status Bar -->
+                    <header className="p-6 pt-12 glass z-50">
                         <div className="flex justify-between items-end mb-4">
-                            <div className="text-[10px] font-black opacity-50 uppercase tracking-widest">Age ${state.age} • Week ${state.week}</div>
-                            <div className="font-black text-4xl tracking-tighter">£${state.money.toLocaleString()}</div>
+                            <div>
+                                <h1 className="text-2xl font-black tracking-tighter">${state.name}</h1>
+                                <div className="text-[10px] font-bold opacity-40 uppercase tracking-widest">Age ${state.age} • Week ${state.week}</div>
+                            </div>
+                            <div className="text-3xl font-black">£${state.money.toLocaleString()}</div>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <${ProgressBar} value=${state.health} max=${100} color="#ff3b30" />
-                            <${ProgressBar} value=${state.happiness} max=${100} color="#ffcc00" />
+                        <div className="space-y-2">
+                            <div className="flex items-center gap-3">
+                                <${Lucide.Heart} size=${14} className="text-red-500" />
+                                <${ProgressBar} value=${state.health} max=${100} color="#ef4444" />
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <${Lucide.Smile} size=${14} className="text-yellow-500" />
+                                <${ProgressBar} value=${state.happiness} max=${100} color="#eab308" />
+                            </div>
                         </div>
                     </header>
 
-                    <main className="max-w-md mx-auto p-4 space-y-6">
+                    <!-- Main Content Area -->
+                    <main className="flex-1 overflow-y-auto p-4 pb-40 no-scrollbar">
+                        
                         ${view === 'home' && html`
                             <div className="space-y-6">
-                                <div className="grid grid-cols-4 gap-6 p-2 mb-4">
-                                    <${AppIcon} icon=${Lucide.GraduationCap} label="School" color="bg-orange-500" onClick=${() => setView('edu')} />
-                                    <${AppIcon} icon=${Lucide.Briefcase} label="Jobs" color="bg-blue-500" onClick=${() => setView('jobs')} />
-                                    <${AppIcon} icon=${Lucide.ShoppingBag} label="Phones" color="bg-yellow-500" onClick=${() => { setView('store'); setStoreTab('goods'); }} />
-                                    <${AppIcon} icon=${Lucide.Car} label="Motors" color="bg-zinc-600" onClick=${() => { setView('store'); setStoreTab('auto'); }} />
-                                    <${AppIcon} icon=${Lucide.Home} label="Estates" color="bg-green-500" onClick=${() => { setView('store'); setStoreTab('estate'); }} />
-                                    <${AppIcon} icon=${Lucide.Diamond} label="Luxe" color="bg-purple-500" onClick=${() => { setView('store'); setStoreTab('luxe'); }} />
-                                    <${AppIcon} icon=${Lucide.Heart} label="Wellness" color="bg-red-500" onClick=${() => { setView('store'); setStoreTab('wellness'); }} />
-                                    <${AppIcon} icon=${Lucide.Smartphone} label="Social" color="bg-pink-500" onClick=${() => { setView('store'); setStoreTab('social'); }} />
-                                    <${AppIcon} icon=${Lucide.User} label="Profile" color="bg-cyan-500" onClick=${() => setView('profile')} />
-                                    <${AppIcon} icon=${Lucide.Skull} label="Dark Web" color="bg-zinc-800" onClick=${() => setView('thief')} />
+                                <div className="glass p-8 rounded-[40px] flex flex-col items-center">
+                                    <${CharacterVisual} state=${state} large=${true} />
+                                    <div className="mt-4 text-center">
+                                        <div className="text-sm font-bold opacity-40 uppercase">Job</div>
+                                        <div className="text-xl font-black">${state.age < 16 ? 'Student' : 'Unemployed'}</div>
+                                    </div>
                                 </div>
-                                <div className="p-8 rounded-[40px] bg-white text-black shadow-xl">
-                                    <div className="text-[10px] font-black opacity-50 mb-1 uppercase tracking-widest">Net Worth</div>
-                                    <div className="text-4xl font-black tracking-tighter">£${(state.money + (state.assets.house.type === 'owned' ? state.assets.house.cost : 0) + (state.assets.car?.price || 0)).toLocaleString()}</div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <button className="glass p-6 rounded-3xl flex flex-col items-center gap-2 group active:scale-95 transition-all" onClick=${() => setView('darkweb')}>
+                                        <div className="w-12 h-12 bg-red-600/20 rounded-2xl flex items-center justify-center text-red-500"><${Lucide.Skull} /></div>
+                                        <span className="font-black text-xs uppercase">Dark Web</span>
+                                    </button>
+                                    <button className="glass p-6 rounded-3xl flex flex-col items-center gap-2 active:scale-95 transition-all" onClick=${tick}>
+                                        <div className="w-12 h-12 bg-blue-600/20 rounded-2xl flex items-center justify-center text-blue-500"><${Lucide.Plus} /></div>
+                                        <span className="font-black text-xs uppercase">Next Week</span>
+                                    </button>
                                 </div>
+
                                 <div className="space-y-2">
-                                    ${state.logs.map(log => html`
-                                        <div key=${log.id} className="p-4 bg-zinc-900/50 rounded-2xl flex items-center gap-4 animate-in slide-in-from-left duration-300 border border-white/5">
-                                            <div className=${`w-2 h-2 rounded-full ${log.type === 'success' ? 'bg-green-500' : log.type === 'danger' ? 'bg-red-500' : 'bg-zinc-500'}`} />
-                                            <span className="text-xs font-bold text-zinc-300">${log.message}</span>
+                                    ${state.logs.map(l => html`
+                                        <div key=${l.id} className="p-4 rounded-2xl bg-white/5 border border-white/5 text-xs font-bold animate-in slide-in-from-left">
+                                            <span className=${l.type === 'error' ? 'text-red-500' : 'text-green-500'}>• </span> ${l.msg}
                                         </div>
                                     `)}
                                 </div>
                             </div>
                         `}
 
-                        ${view === 'thief' && html`
+                        ${view === 'darkweb' && html`
+                            <div className="space-y-6 animate-in fade-in zoom-in">
+                                <div className="flex items-center gap-4 mb-4">
+                                    <button onClick=${() => setView('home')}><${Lucide.ArrowLeft} /></button>
+                                    <h2 className="text-3xl font-black">Dark Web</h2>
+                                </div>
+                                <p className="text-red-500 font-bold text-xs bg-red-500/10 p-4 rounded-xl">WARNING: High risk of prison time. Illegal activities below.</p>
+                                <div className="grid gap-3">
+                                    <button className="glass p-6 rounded-3xl flex justify-between items-center group active:bg-red-900/40">
+                                        <span className="font-bold">Hack Bank Account</span>
+                                        <span className="text-red-500 font-black text-xs">Risk 60%</span>
+                                    </button>
+                                    <button className="glass p-6 rounded-3xl flex justify-between items-center group active:bg-red-900/40">
+                                        <span className="font-bold">Grand Theft Auto</span>
+                                        <span className="text-red-500 font-black text-xs">Risk 40%</span>
+                                    </button>
+                                    <button className="glass p-6 rounded-3xl flex justify-between items-center group active:bg-red-900/40">
+                                        <span className="font-bold">Heist Luxury Store</span>
+                                        <span className="text-red-500 font-black text-xs">Risk 85%</span>
+                                    </button>
+                                </div>
+                            </div>
+                        `}
+
+                        ${view === 'edu' && html`
+                            <div className="space-y-8 animate-in slide-in-from-bottom">
+                                <h2 className="text-4xl font-black tracking-tighter">Campus</h2>
+                                
+                                <section className="space-y-4">
+                                    <div className="glass p-6 rounded-3xl">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="font-black text-xs uppercase tracking-widest">Primary School</span>
+                                            <span className="text-xs font-bold text-green-400">${state.education.primary}/60</span>
+                                        </div>
+                                        <${ProgressBar} value=${state.education.primary} max=${60} color="#10b981" />
+                                        <button className="w-full bg-white text-black font-black mt-4 py-3 rounded-xl active:scale-95 disabled:opacity-50" disabled=${state.education.primary >= 60} onClick=${() => doEducation('primary')}>Attend (+£10)</button>
+                                    </div>
+
+                                    <div className="glass p-6 rounded-3xl">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="font-black text-xs uppercase tracking-widest">High School</span>
+                                            <span className="text-xs font-bold text-blue-400">${state.education.secondary}/60</span>
+                                        </div>
+                                        <${ProgressBar} value=${state.education.secondary} max=${60} color="#3b82f6" />
+                                        <button className="w-full bg-white text-black font-black mt-4 py-3 rounded-xl active:scale-95 disabled:opacity-50" disabled=${state.education.primary < 60 || state.education.secondary >= 60} onClick=${() => doEducation('secondary')}>Attend (+£10)</button>
+                                    </div>
+                                </section>
+
+                                <section>
+                                    <h3 className="text-xs font-black uppercase tracking-widest opacity-40 mb-4">University Degrees</h3>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        ${SUBJECTS.map(s => html`
+                                            <button key=${s} className="glass p-4 rounded-2xl flex flex-col gap-1 items-start active:bg-white/10" onClick=${() => doEducation('subject', s)}>
+                                                <span className="font-bold text-sm">${s}</span>
+                                                <div className="flex justify-between w-full items-center">
+                                                    <span className="text-[9px] font-black opacity-40 uppercase">LVL ${state.education.subjects[s] || 0}</span>
+                                                    <span className="text-[9px] font-bold text-red-500">-£10</span>
+                                                </div>
+                                            </button>
+                                        `)}
+                                    </div>
+                                </section>
+                            </div>
+                        `}
+
+                        ${view === 'shop' && html`
                             <div className="space-y-6">
-                                <div className="flex items-center gap-4"><button onClick=${() => setView('home')}><${Lucide.ArrowLeft}/></button><h2 className="text-3xl font-black">Heist Board</h2></div>
-                                <div className="flex gap-2 p-2 bg-zinc-900/50 rounded-2xl">
-                                    ${['phones', 'cars', 'houses'].map(t => html`
-                                        <button onClick=${() => setThiefTab(t)} className=${`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${thiefTab === t ? 'bg-white text-black' : 'text-zinc-500'}`}>${t}</button>
+                                <div className="flex overflow-x-auto gap-2 pb-2 no-scrollbar">
+                                    ${['phones', 'samsungs', 'cars', 'houses', 'chains', 'rings'].map(t => html`
+                                        <button key=${t} onClick=${() => setShopTab(t)} className=${`px-6 py-2 rounded-full font-black text-xs uppercase tracking-widest transition-all ${shopTab === t ? 'bg-white text-black' : 'bg-white/10'}`}>${t}</button>
                                     `)}
                                 </div>
+
                                 <div className="grid gap-3">
-                                    ${(thiefTab === 'phones' ? PHONES : thiefTab === 'cars' ? CARS : HOUSES).map((item, i) => html`
-                                        <button onClick=${() => steal(thiefTab.slice(0, -1), item)} className="p-5 bg-zinc-900/40 border border-white/5 rounded-3xl flex justify-between items-center group active:scale-[0.98]">
-                                            <div>
-                                                <div className="font-black">${item.name}</div>
-                                                <div className="text-xs font-bold opacity-40 uppercase tracking-widest">Value £${item.price?.toLocaleString()}</div>
+                                    ${shopTab === 'phones' && PHONES.map(p => html`
+                                        <button key=${p.id} onClick=${() => buyItem('phone', p)} className="glass p-6 rounded-3xl flex justify-between items-center active:scale-95">
+                                            <div className="flex items-center gap-4">
+                                                <${Lucide.Smartphone} className="opacity-40" />
+                                                <span className="font-bold">${p.name}</span>
                                             </div>
-                                            <div className="text-red-500 font-black text-xs uppercase bg-red-500/10 px-3 py-1 rounded-full">Steal (${getTheftChance(item.price)}%)</div>
+                                            <span className="text-green-500 font-black">£${p.price.toLocaleString()}</span>
+                                        </button>
+                                    `)}
+                                    ${shopTab === 'samsungs' && SAMSUNGS.map(p => html`
+                                        <button key=${p.id} onClick=${() => buyItem('phone', p)} className="glass p-6 rounded-3xl flex justify-between items-center active:scale-95">
+                                            <div className="flex items-center gap-4">
+                                                <${Lucide.Tablet} className="opacity-40" />
+                                                <span className="font-bold">${p.name}</span>
+                                            </div>
+                                            <span className="text-green-500 font-black">£${p.price.toLocaleString()}</span>
+                                        </button>
+                                    `)}
+                                    ${shopTab === 'cars' && CARS.map(c => html`
+                                        <button key=${c.name} onClick=${() => buyItem('car', c)} className="glass p-6 rounded-3xl flex justify-between items-center active:scale-95">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-8 h-4 rounded-full" style=${{ backgroundColor: c.color }} />
+                                                <span className="font-bold">${c.name}</span>
+                                            </div>
+                                            <span className="text-green-500 font-black">£${c.price.toLocaleString()}</span>
+                                        </button>
+                                    `)}
+                                    ${shopTab === 'houses' && HOUSES.map(h => html`
+                                        <button key=${h.id} onClick=${() => buyItem('house', h)} className="glass p-6 rounded-3xl flex justify-between items-center active:scale-95">
+                                            <div className="flex items-center gap-4">
+                                                <${Lucide.Home} className="opacity-40" />
+                                                <span className="font-bold">${h.name}</span>
+                                            </div>
+                                            <span className="text-green-500 font-black">£${h.price.toLocaleString()}</span>
+                                        </button>
+                                    `)}
+                                    ${shopTab === 'chains' && CHAINS.map(c => html`
+                                        <button key=${c.name} onClick=${() => buyItem('chain', c)} className="glass p-6 rounded-3xl flex justify-between items-center active:scale-95">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-6 h-6 rounded-full" style=${{ background: c.color }} />
+                                                <span className="font-bold">${c.name}</span>
+                                            </div>
+                                            <span className="text-green-500 font-black">£${c.price.toLocaleString()}</span>
+                                        </button>
+                                    `)}
+                                    ${shopTab === 'rings' && RINGS.map(r => html`
+                                        <button key=${r.name} onClick=${() => buyItem('ring', r)} className="glass p-6 rounded-3xl flex justify-between items-center active:scale-95">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-4 h-4 rounded-full border-2" style=${{ borderColor: r.color }} />
+                                                <span className="font-bold">${r.name}</span>
+                                            </div>
+                                            <span className="text-green-500 font-black">£${r.price.toLocaleString()}</span>
                                         </button>
                                     `)}
                                 </div>
                             </div>
                         `}
 
-                        ${view === 'edu' && html`
-                            <div className="space-y-8">
-                                <div className="flex items-center gap-4"><button onClick=${() => setView('home')}><${Lucide.ArrowLeft}/></button><h2 className="text-3xl font-black">Education</h2></div>
-                                <section>
-                                    <h3 className="text-xs font-black uppercase tracking-widest opacity-40 mb-4">Core Schooling</h3>
-                                    <div className="space-y-3">
-                                        <div className="bg-zinc-900/50 p-6 rounded-3xl border border-white/5">
-                                            <div className="flex justify-between items-center mb-3"><span className="font-black uppercase tracking-widest text-xs">Primary School</span><span className="text-xs font-bold text-green-400">LVL ${state.education.primary}/60</span></div>
-                                            <${ProgressBar} value=${state.education.primary} max=${60} color="#10b981" />
-                                            <button onClick=${() => study('primary')} disabled=${state.education.primary >= 60} className="w-full mt-4 py-3 bg-white text-black font-black uppercase text-[10px] rounded-xl disabled:opacity-50">Study Hard</button>
+                        ${view === 'profile' && html`
+                            <div className="space-y-8 animate-in slide-in-from-right">
+                                <h2 className="text-4xl font-black tracking-tighter">My Identity</h2>
+                                <div className="glass p-10 rounded-[60px] flex flex-col items-center">
+                                    <${CharacterVisual} state=${state} large=${true} />
+                                    <h3 className="text-3xl font-black mt-10">${state.name}</h3>
+                                    <div className="flex gap-2 mt-4">
+                                        <span className="bg-white/10 px-4 py-1 rounded-full text-[10px] font-black uppercase">${state.gender}</span>
+                                        <span className="bg-blue-600 px-4 py-1 rounded-full text-[10px] font-black uppercase">Lv. ${state.age}</span>
+                                    </div>
+                                    
+                                    <div className="w-full mt-10 grid grid-cols-2 gap-4">
+                                        <div className="p-5 bg-white/5 rounded-3xl text-center border border-white/5">
+                                            <div className="text-[10px] font-bold opacity-30 uppercase mb-1">Residence</div>
+                                            <div className="text-sm font-black truncate">${state.assets.house.name}</div>
                                         </div>
-                                        <div className="bg-zinc-900/50 p-6 rounded-3xl border border-white/5">
-                                            <div className="flex justify-between items-center mb-3"><span className="font-black uppercase tracking-widest text-xs">High School</span><span className="text-xs font-bold text-blue-400">LVL ${state.education.secondary}/60</span></div>
-                                            <${ProgressBar} value=${state.education.secondary} max=${60} color="#3b82f6" />
-                                            <button onClick=${() => study('secondary')} disabled=${state.education.secondary >= 60 || state.education.primary < 60} className="w-full mt-4 py-3 bg-white text-black font-black uppercase text-[10px] rounded-xl disabled:opacity-50">Study Hard</button>
+                                        <div className="p-5 bg-white/5 rounded-3xl text-center border border-white/5">
+                                            <div className="text-[10px] font-bold opacity-30 uppercase mb-1">Vehicle</div>
+                                            <div className="text-sm font-black truncate">${state.assets.car?.name || 'On Foot'}</div>
+                                        </div>
+                                        <div className="p-5 bg-white/5 rounded-3xl text-center border border-white/5">
+                                            <div className="text-[10px] font-bold opacity-30 uppercase mb-1">Smartphone</div>
+                                            <div className="text-sm font-black truncate">${state.assets.phone?.name || 'None'}</div>
+                                        </div>
+                                        <div className="p-5 bg-white/5 rounded-3xl text-center border border-white/5">
+                                            <div className="text-[10px] font-bold opacity-30 uppercase mb-1">Net Worth</div>
+                                            <div className="text-sm font-black text-green-500">£${(state.money + (state.assets.car?.price || 0) + (state.assets.house.price || 0)).toLocaleString()}</div>
                                         </div>
                                     </div>
-                                </section>
-                                <section>
-                                    <h3 className="text-xs font-black uppercase tracking-widest opacity-40 mb-4">University Subjects</h3>
-                                    <div className="grid gap-2">
-                                        ${SUBJECTS.map(sub => html`
-                                            <${ActionButton} key=${sub} label=${sub.charAt(0).toUpperCase() + sub.slice(1)} subLabel="Knowledge Expansion" cost="£10" costColor="red" onClick=${() => study(sub)} variant=${state.education[sub] >= 120 ? 'success' : 'default'} />
-                                        `)}
-                                    </div>
-                                </section>
-                            </div>
-                        `}
 
-                        ${view === 'jobs' && html`
-                            <div className="space-y-4">
-                                <div className="flex justify-between items-center mb-2"><div className="flex items-center gap-4"><button onClick=${() => setView('home')}><${Lucide.ArrowLeft}/></button><h2 className="text-3xl font-black">Careers</h2></div>${state.job && html`<button onClick=${() => setState(p => ({...p, job: null, jobSalary: 0}))} className="text-[10px] font-black text-red-400 uppercase tracking-widest border border-red-500/20 px-4 py-2 rounded-full">Resign</button>`}</div>
-                                ${JOBS.map(j => html`
-                                    <div className=${`p-6 rounded-[32px] border transition-all ${state.job === j.title ? 'bg-blue-600/20 border-blue-500' : 'bg-zinc-900/40 border-white/5'}`}>
-                                        <div className="flex justify-between items-start mb-4">
-                                            <div>
-                                                <div className="font-black text-xl">${j.title}</div>
-                                                <div className="text-green-400 font-bold tracking-widest uppercase text-[10px]">£${j.salary}/week</div>
-                                            </div>
-                                            ${state.job === j.title && html`<span className="bg-blue-500 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest">Active</span>`}
-                                        </div>
-                                        <div className="text-[10px] font-bold opacity-40 uppercase tracking-widest space-y-1 mb-6">
-                                            <div>• Min Age: ${j.minAge}</div>
-                                            ${j.reqSubject && html`<div>• Req: ${j.reqSubject} level ${j.reqLevel}</div>`}
-                                        </div>
-                                        ${state.job !== j.title && html`<button onClick=${() => applyJob(j)} className="w-full py-4 rounded-2xl bg-white text-black font-black uppercase tracking-widest text-[10px] active:scale-[0.98]">Apply Now</button>`}
-                                    </div>
-                                `)}
-                            </div>
-                        `}
-
-                        ${view === 'store' && html`
-                            <div className="space-y-6">
-                                <div className="flex items-center gap-4"><button onClick=${() => setView('home')}><${Lucide.ArrowLeft}/></button><h2 className="text-3xl font-black">Store</h2></div>
-                                <div className="overflow-x-auto pb-4 no-scrollbar">
-                                    <div className="flex gap-2 p-2 bg-zinc-900/50 rounded-2xl w-max">
-                                        ${['goods', 'auto', 'estate', 'luxe', 'social', 'wellness'].map(v => html`
-                                            <button onClick=${() => setStoreTab(v)} className=${`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${storeTab === v ? 'bg-white text-black scale-105' : 'text-zinc-500'}`}>${v}</button>
-                                        `)}
-                                    </div>
+                                    <button className="mt-12 text-red-500/50 hover:text-red-500 text-[10px] font-black uppercase tracking-[0.2em]" onClick=${() => { localStorage.removeItem('chow_sim_v26'); window.location.reload(); }}>End Current Life</button>
                                 </div>
+                            </div>
+                        `}
 
-                                ${storeTab === 'goods' && html`
-                                    <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                        <h3 className="text-xs font-black uppercase tracking-widest opacity-40 mb-4">Electronics</h3>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            ${PHONES.map(p => html`
-                                                <button onClick=${() => buy('phone', p)} className="p-5 bg-zinc-900/40 rounded-3xl border border-white/5 text-left active:scale-[0.98] transition-transform">
-                                                    <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center mb-4"><${Lucide.Smartphone} size=${20} /></div>
-                                                    <div className="font-black text-sm">${p.name}</div>
-                                                    <div className="text-green-400 font-bold text-xs uppercase">£${p.price.toLocaleString()}</div>
-                                                </button>
-                                            `)}
-                                        </div>
-                                    </section>
-                                `}
-
-                                ${storeTab === 'auto' && html`
-                                    <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                        <h3 className="text-xs font-black uppercase tracking-widest opacity-40 mb-4">Dealership</h3>
-                                        <div className="space-y-3">
-                                            ${CARS.map(c => html`
-                                                <button onClick=${() => buy('car', c)} className="w-full p-6 bg-zinc-900/40 rounded-[32px] border border-white/5 flex justify-between items-center active:scale-[0.98]">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="w-3 h-10 rounded-full shadow-lg" style=${{ backgroundColor: c.color }} />
-                                                        <div className="font-black text-lg text-left">${c.name}</div>
-                                                    </div>
-                                                    <div className="font-black text-green-400 uppercase tracking-widest text-xs">£${c.price.toLocaleString()}</div>
-                                                </button>
-                                            `)}
-                                        </div>
-                                    </section>
-                                `}
-
-                                ${storeTab === 'estate' && html`
-                                    <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                        <h3 className="text-xs font-black uppercase tracking-widest opacity-40 mb-4">Properties</h3>
-                                        <div className="space-y-3">
-                                            ${HOUSES.filter(h => h.price > 0).map(h => html`
-                                                <div className="p-6 bg-zinc-900/40 rounded-[32px] border border-white/5">
-                                                    <div className="flex justify-between items-start mb-4">
-                                                        <div className="font-black text-xl text-left">${h.name}</div>
-                                                        <div className="text-right">
-                                                            <div className="font-black text-green-400 text-xs">£${h.price.toLocaleString()}</div>
-                                                            <div className="font-bold text-zinc-500 text-[10px]">Rent: £${h.rent}/wk</div>
+                        ${view === 'phone' && html`
+                            <div className="h-full flex flex-col items-center animate-in slide-in-from-bottom duration-500">
+                                ${!phoneApp ? html`
+                                    <!-- iPhone Lock Screen Look -->
+                                    <div className="mt-20 flex flex-col items-center">
+                                        <h2 className="text-7xl font-light mb-2">12:00</h2>
+                                        <p className="text-lg font-medium opacity-60">Monday, 1 January</p>
+                                    </div>
+                                    <div className="app-grid mt-20 p-6 w-full">
+                                        <button onClick=${() => setPhoneApp('store')} className="flex flex-col items-center gap-1 group">
+                                            <div className="w-16 h-16 bg-blue-500 rounded-2xl flex items-center justify-center text-white shadow-lg active:scale-90 transition-transform"><${Lucide.ShoppingBag} size=${32} /></div>
+                                            <span className="text-[10px] font-medium opacity-80 group-active:opacity-100">App Store</span>
+                                        </button>
+                                        <button onClick=${() => setPhoneApp('tok')} className="flex flex-col items-center gap-1 group">
+                                            <div className="w-16 h-16 bg-black rounded-2xl flex items-center justify-center text-white border border-white/20 shadow-lg active:scale-90 transition-transform"><${Lucide.Video} size=${32} /></div>
+                                            <span className="text-[10px] font-medium opacity-80 group-active:opacity-100">ChowTok</span>
+                                        </button>
+                                        <button onClick=${() => setPhoneApp('chat')} className="flex flex-col items-center gap-1 group">
+                                            <div className="w-16 h-16 bg-green-500 rounded-2xl flex items-center justify-center text-white shadow-lg active:scale-90 transition-transform"><${Lucide.MessageCircle} size=${32} /></div>
+                                            <span className="text-[10px] font-medium opacity-80 group-active:opacity-100">Chow Chat</span>
+                                        </button>
+                                        <button onClick=${() => setPhoneApp('ai')} className="flex flex-col items-center gap-1 group">
+                                            <div className="w-16 h-16 bg-gradient-to-tr from-purple-600 to-pink-500 rounded-2xl flex items-center justify-center text-white shadow-lg active:scale-90 transition-transform"><${Lucide.Zap} size=${32} /></div>
+                                            <span className="text-[10px] font-medium opacity-80 group-active:opacity-100">Chow AI</span>
+                                        </button>
+                                    </div>
+                                ` : html`
+                                    <div className="w-full flex flex-col h-full bg-black/90 rounded-[40px] border border-white/10 overflow-hidden ios-shadow">
+                                        <header className="p-6 border-b border-white/10 flex items-center justify-between">
+                                            <button onClick=${() => setPhoneApp(null)}><${Lucide.ChevronLeft} /></button>
+                                            <span className="font-black uppercase text-xs tracking-widest">${phoneApp}</span>
+                                            <div className="w-6" />
+                                        </header>
+                                        
+                                        <div className="flex-1 overflow-y-auto p-6">
+                                            ${phoneApp === 'ai' && html`
+                                                <div className="flex flex-col h-full">
+                                                    <div className="flex-1 space-y-4 mb-4 overflow-y-auto max-h-[400px] no-scrollbar">
+                                                        <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                                                            <p className="text-xs opacity-50 mb-1">Chow AI</p>
+                                                            <p className="text-sm">Hello ${state.name}! I am your personal neural link. How can I assist you today?</p>
                                                         </div>
+                                                        ${aiResponse && html`
+                                                            <div className="bg-blue-600/10 p-4 rounded-2xl border border-blue-600/20 ml-8 animate-in slide-in-from-right">
+                                                                <p className="text-xs text-blue-400 mb-1">Chow AI Response</p>
+                                                                <p className="text-sm">${aiResponse}</p>
+                                                            </div>
+                                                        `}
                                                     </div>
-                                                    <div className="grid grid-cols-2 gap-3">
-                                                        <button onClick=${() => rentHouse(h)} className="py-3 rounded-xl bg-zinc-800 text-zinc-300 font-black uppercase text-[10px]">Rent</button>
-                                                        <button onClick=${() => buy('house', h)} className="py-3 rounded-xl bg-white text-black font-black uppercase text-[10px]">Buy</button>
+                                                    <div className="flex gap-2">
+                                                        <input className="flex-1 bg-white/5 p-4 rounded-2xl text-sm" placeholder="Ask anything..." value=${aiQuery} onChange=${e => setAiQuery(e.target.value)} onKeyDown=${e => e.key === 'Enter' && askChowAi()} />
+                                                        <button className="bg-blue-600 p-4 rounded-2xl active:scale-95" onClick=${askChowAi} disabled=${isAiLoading}>
+                                                            <${Lucide.Send} size=${18} />
+                                                        </button>
                                                     </div>
                                                 </div>
-                                            `)}
-                                        </div>
-                                    </section>
-                                `}
-
-                                ${storeTab === 'luxe' && html`
-                                    <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                        <h3 className="text-xs font-black uppercase tracking-widest opacity-40 mb-4">Jewelry</h3>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            ${Object.keys(CHAIN_COLORS).map(type => html`
-                                                <button onClick=${() => {
-                                                    const price = type === 'rainbow' ? 50000 : 500;
-                                                    if (state.money >= price) {
-                                                        setState(p_ => ({...p_, money: p_.money - price, assets: {...p_.assets, chain: type}, happiness: Math.min(100, p_.happiness + 5)}));
-                                                        addLog(`Bought ${type} chain`, 'success');
-                                                    } else {
-                                                        addLog("Too expensive", 'danger');
-                                                    }
-                                                }} className="p-6 bg-zinc-900/40 rounded-[32px] border border-white/5 flex flex-col items-center gap-4 active:scale-[0.98]">
-                                                    <div className="w-16 h-16 rounded-full flex items-center justify-center shadow-lg" style=${{ background: CHAIN_COLORS[type] }}>
-                                                        <${Lucide.Diamond} size=${28} color="white" />
+                                            `}
+                                            ${phoneApp === 'tok' && html`
+                                                <div className="flex flex-col items-center gap-8 py-10">
+                                                    <div className="w-32 h-32 rounded-full bg-gradient-to-br from-pink-500 to-yellow-500 p-1">
+                                                        <div className="w-full h-full bg-black rounded-full flex items-center justify-center font-black text-2xl">C</div>
                                                     </div>
                                                     <div className="text-center">
-                                                        <div className="font-black uppercase tracking-widest text-xs">${type}</div>
-                                                        <div className="text-zinc-500 font-bold text-[10px] uppercase">£${type === 'rainbow' ? '50,000' : '500'}</div>
+                                                        <div className="text-3xl font-black">${state.chowtok.followers.toLocaleString()}</div>
+                                                        <div className="text-[10px] font-bold opacity-40 uppercase">Followers</div>
                                                     </div>
-                                                </button>
-                                            `)}
-                                        </div>
-                                    </section>
-                                `}
-
-                                ${storeTab === 'social' && html`
-                                    <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                        <div className="bg-zinc-900 p-8 rounded-[40px] border border-white/5 flex flex-col items-center">
-                                            <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-pink-500 to-yellow-500 p-1 mb-6">
-                                                <div className="w-full h-full rounded-full bg-black flex items-center justify-center"><${Lucide.Video} size=${40}/></div>
-                                            </div>
-                                            <h3 className="text-2xl font-black mb-1">ChowTok Growth</h3>
-                                            <p className="text-xs font-bold opacity-40 uppercase tracking-widest mb-10 text-center">Increase your social influence</p>
-                                            <div className="w-full space-y-3">
-                                                <${ActionButton} label="10,000 Followers" cost="£1,000" costColor="red" onClick=${() => {
-                                                    if(state.money >= 1000) { setState(p => ({...p, money: p.money-1000, chowtok: {...p.chowtok, followers: p.chowtok.followers + 10000}})); addLog("Bought 10k followers", 'success'); }
-                                                }} />
-                                                <${ActionButton} label="Viral Video Boost" cost="£2,500" costColor="red" variant="accent" onClick=${() => {
-                                                    if(state.money >= 2500) { setState(p => ({...p, money: p.money-2500, chowtok: {...p.chowtok, likes: p.chowtok.likes + 50000}})); addLog("Video went viral!", 'success'); }
-                                                }} />
-                                            </div>
-                                        </div>
-                                    </section>
-                                `}
-
-                                ${storeTab === 'wellness' && html`
-                                    <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                        <h3 className="text-xs font-black uppercase tracking-widest opacity-40 mb-4">Activities & Health</h3>
-                                        <div className="grid gap-3">
-                                            ${ACTIVITIES.map(act => html`
-                                                <${ActionButton} 
-                                                    key=${act.id} 
-                                                    label=${act.name} 
-                                                    icon=${act.icon} 
-                                                    cost=${`£${act.cost}`} 
-                                                    costColor="red" 
-                                                    subLabel=${`+${act.happy} Happy ${act.health !== 0 ? `, ${act.health > 0 ? '+' : ''}${act.health} Health` : ''}`}
-                                                    onClick=${() => doActivity(act)} 
-                                                />
-                                            `)}
-                                        </div>
-                                    </section>
-                                `}
-                            </div>
-                        `}
-
-                        ${view === 'profile' && html`
-                            <div className="space-y-6">
-                                <div className="flex items-center gap-4"><button onClick=${() => setView('home')}><${Lucide.ArrowLeft}/></button><h2 className="text-3xl font-black">Identity</h2></div>
-                                <div className="bg-zinc-900/40 backdrop-blur-3xl p-10 rounded-[60px] border border-white/10 flex flex-col items-center shadow-2xl">
-                                    <${CarVisual} car=${state.assets.car} />
-                                    <div className="mt-[-40px]">
-                                        <${CharacterVisual} chain=${state.assets.chain} phone=${state.assets.phone} gender=${state.gender} />
-                                    </div>
-                                    <h2 className="text-4xl font-black tracking-tighter mt-6">${state.name}</h2>
-                                    <p className="text-blue-400 font-black uppercase tracking-widest text-xs mt-1">${state.job || "Unemployed"}</p>
-                                    
-                                    <div className="grid grid-cols-2 gap-4 w-full mt-10">
-                                        <div className="p-5 bg-white/5 rounded-3xl border border-white/5">
-                                            <div className="text-[10px] font-black opacity-30 uppercase tracking-widest mb-1">Handset</div>
-                                            <div className="text-sm font-bold">${state.assets.phone?.name || "None"}</div>
-                                        </div>
-                                        <div className="p-5 bg-white/5 rounded-3xl border border-white/5">
-                                            <div className="text-[10px] font-black opacity-30 uppercase tracking-widest mb-1">Residence</div>
-                                            <div className="text-sm font-bold truncate">${state.assets.house.name}</div>
-                                        </div>
-                                        <div className="p-5 bg-white/5 rounded-3xl border border-white/5 col-span-2 flex justify-between items-center">
-                                            <div>
-                                                <div className="text-[10px] font-black opacity-30 uppercase tracking-widest mb-1">Social</div>
-                                                <div className="text-sm font-bold">${state.chowtok.followers.toLocaleString()} Followers</div>
-                                            </div>
-                                            <${Lucide.Video} className="opacity-20"/>
+                                                    <button className="w-full bg-white text-black font-black py-4 rounded-2xl active:scale-95" onClick=${() => setState(p => ({...p, chowtok: { ...p.chowtok, followers: p.chowtok.followers + 100 }}))}>POST CLIP (+100)</button>
+                                                </div>
+                                            `}
+                                            ${phoneApp === 'store' && html`
+                                                <div className="space-y-4">
+                                                    <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="w-12 h-12 bg-pink-500 rounded-xl" />
+                                                            <div>
+                                                                <div className="font-bold text-sm">ChowTok</div>
+                                                                <div className="text-[10px] opacity-40">Social • Viral</div>
+                                                            </div>
+                                                        </div>
+                                                        <button className="bg-white/10 px-4 py-1 rounded-full text-[10px] font-black uppercase">Open</button>
+                                                    </div>
+                                                    <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="w-12 h-12 bg-indigo-500 rounded-xl" />
+                                                            <div>
+                                                                <div className="font-bold text-sm">Chow AI</div>
+                                                                <div className="text-[10px] opacity-40">Intelligence • Help</div>
+                                                            </div>
+                                                        </div>
+                                                        <button className="bg-white/10 px-4 py-1 rounded-full text-[10px] font-black uppercase">Open</button>
+                                                    </div>
+                                                </div>
+                                            `}
+                                            ${phoneApp === 'chat' && html`
+                                                <div className="flex flex-col items-center justify-center py-20 opacity-30">
+                                                    <${Lucide.MessagesSquare} size=${64} />
+                                                    <p className="mt-4 font-bold">No recent chats.</p>
+                                                </div>
+                                            `}
                                         </div>
                                     </div>
-                                    
-                                    <button onClick=${() => {localStorage.removeItem('lifeSimState_v5'); window.location.reload();}} className="mt-12 text-[10px] font-black text-red-500/50 uppercase tracking-[0.2em] hover:text-red-500 transition-colors">Terminate Life Protocol</button>
-                                </div>
+                                `}
                             </div>
                         `}
                     </main>
 
-                    ${showSettings && html`
-                        <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[100] flex items-center justify-center p-6" onClick=${() => setShowSettings(false)}>
-                            <div className="bg-zinc-900 w-full max-w-sm p-8 rounded-[40px] border border-white/10 shadow-2xl" onClick=${e => e.stopPropagation()}>
-                                <div className="flex justify-between items-center mb-8">
-                                    <h3 className="text-2xl font-black">Personalize</h3>
-                                    <button onClick=${() => setShowSettings(false)} className="text-zinc-500"><${Lucide.Plus} size=${32} className="rotate-45"/></button>
-                                </div>
-                                <div className="grid grid-cols-3 gap-4">
-                                    ${THEMES.map(t => html`
-                                        <button key=${t.id} onClick=${() => setState(p => ({...p, themeColor: t.id}))} className=${`w-full aspect-square rounded-2xl border-4 ${state.themeColor === t.id ? 'border-blue-500' : 'border-transparent'} ${t.color}`} />
-                                    `)}
-                                </div>
-                            </div>
-                        </div>
-                    `}
-
-                    <nav className=${`fixed bottom-0 left-0 right-0 backdrop-blur-3xl border-t border-white/5 pb-10 pt-4 z-50 ${bgStyles[state.themeColor]} bg-opacity-70`}>
-                        <div className="flex justify-around items-end max-w-md mx-auto px-4">
+                    <!-- Navigation Bar -->
+                    <nav className="fixed bottom-0 left-0 right-0 glass pb-10 pt-4 px-6 z-50">
+                        <div className="flex justify-between items-end max-w-md mx-auto">
+                            <NavBtn icon=${Lucide.GraduationCap} label="Academy" active=${view === 'edu'} onClick=${() => setView('edu')} />
                             <NavBtn icon=${Lucide.Home} label="Home" active=${view === 'home'} onClick=${() => setView('home')} />
-                            <NavBtn icon=${Lucide.GraduationCap} label="Study" active=${view === 'edu'} onClick=${() => setView('edu')} />
-                            <button onClick=${tick} className="bg-blue-600 w-16 h-16 rounded-3xl flex items-center justify-center text-white shadow-2xl shadow-blue-500/30 active:scale-90 transition-all">
-                                <${Lucide.Plus} size=${32} strokeWidth=${3} />
-                            </button>
-                            <NavBtn icon=${Lucide.Briefcase} label="Career" active=${view === 'jobs'} onClick=${() => setView('jobs')} />
-                            <NavBtn icon=${Lucide.ShoppingCart} label="Store" active=${view === 'store'} onClick=${() => setView('store')} />
+                            ${state.assets.phone && html`
+                                <NavBtn icon=${Lucide.Smartphone} label="iPhone" active=${view === 'phone'} onClick=${() => { setView('phone'); setPhoneApp(null); }} />
+                            `}
+                            <NavBtn icon=${Lucide.ShoppingCart} label="Shop" active=${view === 'shop'} onClick=${() => setView('shop')} />
                             <NavBtn icon=${Lucide.User} label="Profile" active=${view === 'profile'} onClick=${() => setView('profile')} />
                         </div>
                     </nav>
@@ -703,7 +681,7 @@
         function NavBtn({ icon: Icon, label, active, onClick }) {
             return html`
                 <button onClick=${onClick} className=${`flex flex-col items-center gap-1 transition-all ${active ? 'text-blue-500 scale-110' : 'opacity-40 hover:opacity-100'}`}>
-                    <${Icon} size=${24} strokeWidth=${active ? 3 : 2} />
+                    <${Icon} size=${28} strokeWidth=${active ? 3 : 2} />
                     <span className="text-[8px] font-black uppercase tracking-tighter">${label}</span>
                 </button>
             `;
@@ -714,12 +692,6 @@
     </script>
 </body>
 </html>
-
-
-
-
-
-
 
 
 
