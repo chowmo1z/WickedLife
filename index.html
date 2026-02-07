@@ -1,675 +1,440 @@
-
-import React, { useState, useEffect, useRef } from 'react';
-import ReactDOM from 'react-dom/client';
-import * as Lucide from 'lucide-react';
-import { GoogleGenAI } from "@google/genai";
-
-// --- GAME DATA CONSTANTS (EXPANDED TO MEET SCALE) ---
-
-const THEME_COLORS = {
-    copper: '#b87333', silver: '#c0c0c0', gold: '#ffd700', platinum: '#e5e4e2',
-    emerald: '#50c878', ruby: '#e0115f', sapphire: '#0f52ba', amethyst: '#9966cc',
-    diamond: '#b9f2ff', obsidian: '#282828', rainbow: 'linear-gradient(45deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3)'
-};
-
-const IPHONES = Array.from({ length: 21 }, (_, i) => ({
-    id: `ip-${i}`,
-    name: i === 0 ? "iPhone Original" : `iPhone ${i + 1} Pro Max`,
-    price: Math.floor(150 * (i + 1) * (1 + i * 0.25)),
-    brand: 'Apple',
-    type: 'phone'
-}));
-
-const SAMSUNGS = Array.from({ length: 10 }, (_, i) => ({
-    id: `ss-${i}`,
-    name: `Samsung Galaxy S${21 + i} Ultra`,
-    price: 600 + (i * 350),
-    brand: 'Samsung',
-    type: 'phone'
-}));
-
-const CARS = Array.from({ length: 21 }, (_, i) => {
-    const carNames = ["Bicycle", "Skateboard", "Rusty Sedan", "Old Vespa", "VW Golf", "Honda Civic", "BMW M3", "Tesla Model 3", "Audi RS6", "Porsche 911", "Mercedes G63", "Nissan GT-R", "Lambo Huracan", "Ferrari SF90", "McLaren P1", "Aston Martin DB11", "Rolls Royce", "Bugatti Chiron", "Koenigsegg Jesko", "Private Jet", "SpaceX Starship"];
-    const colors = ["#444", "#222", "#8B4513", "#fbbf24", "#3b82f6", "#fff", "#111", "#fff", "#444", "#facc15", "#000", "#fff", "#fb7185", "#dc2626", "#ea580c", "#1e293b", "#000", "#1e40af", "#fff", "#fff", "#ccc"];
-    return {
-        id: `car-${i}`,
-        name: carNames[i] || `Supercar V${i}`,
-        price: i === 0 ? 100 : Math.floor(500 * Math.pow(1.9, i)),
-        color: colors[i] || "#444"
-    };
-});
-
-const HOUSES = Array.from({ length: 21 }, (_, i) => ({
-    id: `h-${i}`,
-    name: i === 0 ? "Parents' Sofa" : i < 5 ? `City Studio ${i}` : i < 15 ? `Suburban Villa ${i - 4}` : `Mega Mansion Level ${i - 14}`,
-    price: i === 0 ? 0 : Math.floor(25000 * Math.pow(1.85, i)),
-    rent: i === 0 ? 0 : Math.floor(200 * Math.pow(1.45, i))
-}));
-
-const CHAINS = Object.entries(THEME_COLORS).map(([name, color]) => ({
-    id: `chain-${name}`,
-    name: `${name.charAt(0).toUpperCase() + name.slice(1)} Chain`,
-    color,
-    price: 5000
-}));
-
-const RINGS = Object.entries(THEME_COLORS).map(([name, color]) => ({
-    id: `ring-${name}`,
-    name: `${name.charAt(0).toUpperCase() + name.slice(1)} Ring`,
-    color,
-    price: 2500
-}));
-
-const SUBJECTS = [
-    'Mathematics', 'Quantum Physics', 'Genetic Biology', 'Organic Chemistry', 
-    'Fine Arts', 'Music Composition', 'World History', 'Political Geography', 
-    'Computer Science', 'Business Ethics', 'Philosophy', 'Space Law'
-];
-
-const INITIAL_STATE = {
-    hasStarted: false,
-    name: "New Player",
-    gender: 'male',
-    money: 500,
-    age: 10,
-    week: 1,
-    health: 100,
-    happiness: 100,
-    isDead: false,
-    education: {
-        primary: 0,
-        secondary: 0,
-        subjects: SUBJECTS.reduce((acc, s) => ({ ...acc, [s]: 0 }), {})
-    },
-    assets: {
-        house: HOUSES[0],
-        car: null,
-        chain: null,
-        ring: null,
-        phone: null
-    },
-    social: { followers: 0, likes: 0 },
-    logs: []
-};
-
-// --- CORE UI COMPONENTS ---
-
-// Fix: Make 'icon' optional via default value to satisfy TypeScript-like missing prop requirements at lines 375 and 387
-const ProgressBar = ({ value, max, color, icon: Icon = undefined }) => (
-    <div className="flex items-center gap-2 w-full">
-        {Icon && <Icon size={14} className="opacity-50" />}
-        <div className="h-2.5 bg-zinc-900 rounded-full overflow-hidden flex-1 border border-white/5">
-            <div className="h-full transition-all duration-700 ease-out" 
-                 style={{ width: `${Math.min(100, (value / max) * 100)}%`, backgroundColor: color }} />
-        </div>
-    </div>
-);
-
-const CharacterVisual = ({ state, scale = 1 }) => {
-    const { gender, assets } = state;
-    return (
-        <div className="relative flex flex-col items-center justify-center py-10 transition-transform duration-500" style={{ transform: `scale(${scale})` }}>
-            {/* Car Behind */}
-            {assets.car && (
-                <div className="absolute -z-10 opacity-40 blur-[2px] translate-y-6">
-                    <svg width="220" height="110" viewBox="0 0 200 100">
-                        <path d="M10 80 L30 45 L170 45 L190 80 L195 95 L5 95 Z" fill={assets.car.color} />
-                        <circle cx="45" cy="90" r="14" fill="#111" />
-                        <circle cx="155" cy="90" r="14" fill="#111" />
-                    </svg>
-                </div>
-            )}
-            
-            <div className="relative z-10 animate-float">
-                {/* Head */}
-                <div className="w-20 h-20 bg-[#ffdbac] rounded-full relative z-30 shadow-xl">
-                    {gender === 'female' ? 
-                        <div className="absolute top-0 w-full h-10 bg-[#3e2723] rounded-t-full -mt-2" /> : 
-                        <div className="absolute top-0 w-full h-3 bg-[#2d1a12] rounded-t-full" />
-                    }
-                    <div className="flex justify-around mt-8 px-5">
-                        <div className="w-2.5 h-2.5 bg-black rounded-full" />
-                        <div className="w-2.5 h-2.5 bg-black rounded-full" />
-                    </div>
-                </div>
-                
-                {/* Neck & Chain */}
-                <div className="w-5 h-4 bg-[#ffdbac] mx-auto relative z-20 -mt-1">
-                    {assets.chain && (
-                        <div className="absolute top-1 left-[-6px] right-[-6px] h-3 rounded-b-full border-b-[3px]" 
-                             style={{ borderColor: assets.chain.color }} />
-                    )}
-                </div>
-
-                {/* Torso */}
-                <div className="w-24 h-28 bg-zinc-50 rounded-t-3xl relative z-10 shadow-lg border-t border-white/20">
-                    {/* Left Arm + Ring */}
-                    <div className="absolute -left-6 top-2 w-7 h-20 bg-[#ffdbac] rounded-full origin-top rotate-[20deg] flex flex-col items-center justify-end pb-2">
-                        {assets.ring && <div className="w-4 h-1.5 rounded-full mb-1 shadow-sm" style={{ backgroundColor: assets.ring.color }} />}
-                    </div>
-                    {/* Right Arm + Phone */}
-                    <div className="absolute -right-7 top-2 w-7 h-20 bg-[#ffdbac] rounded-full origin-top -rotate-[25deg] flex flex-col items-center justify-end pb-4">
-                        {assets.phone && (
-                            <div className="w-10 h-16 bg-black rounded-xl border border-zinc-800 shadow-2xl flex items-center justify-center -rotate-15 mb-2 overflow-hidden">
-                                <div className="w-full h-full bg-blue-500/20 flex items-center justify-center">
-                                    <div className="w-1.5 h-1.5 bg-zinc-800 rounded-full absolute top-1" />
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-// --- MAIN APPLICATION COMPONENT ---
-
-function App() {
-    const [state, setState] = useState(() => {
-        const saved = localStorage.getItem('chow_sim_ios26_v1');
-        return saved ? JSON.parse(saved) : INITIAL_STATE;
-    });
-    const [view, setView] = useState('home'); 
-    const [shopPage, setShopPage] = useState('iphones');
-    const [phoneApp, setPhoneApp] = useState(null);
-    const [aiQuery, setAiQuery] = useState('');
-    const [aiResponse, setAiResponse] = useState('');
-    const [isAiLoading, setIsAiLoading] = useState(false);
-
-    useEffect(() => {
-        localStorage.setItem('chow_sim_ios26_v1', JSON.stringify(state));
-        if (!state.isDead && (state.health <= 0 || state.happiness <= 0)) {
-            setState(p => ({ ...p, isDead: true }));
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Chow Sim iOS 26 - Ultimate Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react-dom": "https://esm.sh/react-dom@18.2.0/client",
+        "lucide-react": "https://esm.sh/lucide-react@0.263.1",
+        "@google/genai": "https://esm.sh/@google/genai@1.40.0"
+      }
+    }
+    </script>
+    <style>
+        ::-webkit-scrollbar { display: none; }
+        body {
+            background-color: #000;
+            color: #fff;
+            overscroll-behavior: none;
+            touch-action: manipulation;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            padding-bottom: env(safe-area-inset-bottom);
         }
-    }, [state]);
+        input { -webkit-user-select: text; user-select: text; outline: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .glass { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(25px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .ios-shadow { box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.7); }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+        .animate-float { animation: float 4s infinite ease-in-out; }
+        .active-tab { color: #3b82f6; transform: scale(1.1); }
+        .dead-screen { background: linear-gradient(to bottom, #000, #450a0a); }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="module">
+        import React, { useState, useEffect, useRef } from 'react';
+        import ReactDOM from 'react-dom';
+        import * as Lucide from 'lucide-react';
+        import { GoogleGenAI } from "@google/genai";
 
-    const log = (msg, type = 'info') => {
-        setState(p => ({ ...p, logs: [{ id: Date.now(), msg, type }, ...p.logs].slice(0, 5) }));
-    };
+        // --- EXPANDED GAME DATA ---
 
-    const tick = () => {
-        if (state.isDead) return;
-        setState(prev => {
-            const nextWeek = prev.week + 1;
-            const nextAge = nextWeek > 52 ? prev.age + 1 : prev.age;
-            const displayWeek = nextWeek > 52 ? 1 : nextWeek;
+        const THEME_COLORS = {
+            copper: '#b87333', silver: '#c0c0c0', gold: '#ffd700', platinum: '#e5e4e2',
+            emerald: '#50c878', ruby: '#e0115f', sapphire: '#0f52ba', amethyst: '#9966cc',
+            diamond: '#b9f2ff', obsidian: '#282828', rainbow: 'linear-gradient(45deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3)'
+        };
+
+        const IPHONES = Array.from({ length: 21 }, (_, i) => ({
+            id: `ip-${i}`,
+            name: i === 0 ? "iPhone Original" : `iPhone ${i + 1} Pro Max`,
+            price: Math.floor(150 * (i + 1) * (1 + i * 0.25)),
+            type: 'phone', brand: 'Apple'
+        }));
+
+        const SAMSUNGS = Array.from({ length: 10 }, (_, i) => ({
+            id: `ss-${i}`,
+            name: `Samsung Galaxy S${21 + i} Ultra`,
+            price: 600 + (i * 450),
+            type: 'phone', brand: 'Samsung'
+        }));
+
+        const CARS = Array.from({ length: 21 }, (_, i) => {
+            const carNames = ["Bicycle", "Skateboard", "Rusty Sedan", "Old Vespa", "VW Golf", "Honda Civic", "BMW M3", "Tesla Model 3", "Audi RS6", "Porsche 911", "Mercedes G63", "Nissan GT-R", "Lambo Huracan", "Ferrari SF90", "McLaren P1", "Aston Martin DB11", "Rolls Royce", "Bugatti Chiron", "Koenigsegg Jesko", "Private Jet", "SpaceX Starship"];
+            const colors = ["#444", "#222", "#8B4513", "#fbbf24", "#3b82f6", "#fff", "#111", "#fff", "#444", "#facc15", "#000", "#fff", "#fb7185", "#dc2626", "#ea580c", "#1e293b", "#000", "#1e40af", "#fff", "#fff", "#ccc"];
             return {
-                ...prev,
-                week: displayWeek,
-                age: nextAge,
-                money: prev.money + (prev.age > 18 ? 300 : 50),
-                health: Math.max(0, prev.health - (prev.age > 50 ? 2 : 1)),
-                happiness: Math.max(0, prev.happiness - 1.5)
+                id: `car-${i}`,
+                name: carNames[i] || `Supercar V${i}`,
+                price: i === 0 ? 100 : Math.floor(500 * Math.pow(1.95, i)),
+                color: colors[i] || "#444"
             };
         });
-    };
 
-    const study = (type, sub = null) => {
-        if (state.isDead) return;
-        setState(prev => {
-            let cost = 0, hMod = 0, hpMod = 0, mMod = 0;
-            let nextEdu = { ...prev.education };
+        const HOUSES = Array.from({ length: 21 }, (_, i) => ({
+            id: `h-${i}`,
+            name: i === 0 ? "Parents' Sofa" : i < 5 ? `City Studio ${i}` : i < 15 ? `Suburban Villa ${i - 4}` : `Mega Mansion Level ${i - 14}`,
+            price: i === 0 ? 0 : Math.floor(25000 * Math.pow(1.9, i)),
+            rent: i === 0 ? 0 : Math.floor(200 * Math.pow(1.5, i))
+        }));
 
-            if (type === 'primary') {
-                if (prev.education.primary >= 60) return prev;
-                nextEdu.primary += 1;
-                mMod = 10; hpMod = 2; hMod = 2;
-                log("Primary school attendance logged.", "success");
-            } else if (type === 'secondary') {
-                if (prev.education.primary < 60) { log("Primary completion required!", "error"); return prev; }
-                if (prev.education.secondary >= 60) return prev;
-                nextEdu.secondary += 1;
-                mMod = 10; hpMod = 2; hMod = 2;
-                log("Secondary academy attendance logged.", "success");
-            } else if (type === 'subject') {
-                if (prev.education.secondary < 60) { log("Secondary graduation required!", "error"); return prev; }
-                nextEdu.subjects[sub] = (nextEdu.subjects[sub] || 0) + 1;
-                cost = 10; hpMod = -2; hMod = -2;
-                log(`Specializing in ${sub}...`, "info");
+        const CHAINS = Object.entries(THEME_COLORS).map(([name, color]) => ({
+            id: `chain-${name}`, name: `${name.charAt(0).toUpperCase() + name.slice(1)} Chain`, color, price: 5000
+        }));
+
+        const RINGS = Object.entries(THEME_COLORS).map(([name, color]) => ({
+            id: `ring-${name}`, name: `${name.charAt(0).toUpperCase() + name.slice(1)} Ring`, color, price: 2500
+        }));
+
+        const SUBJECTS = ['Mathematics', 'Quantum Physics', 'Genetic Biology', 'Organic Chemistry', 'Fine Arts', 'Music Composition', 'World History', 'Political Geography', 'Computer Science', 'Business Ethics', 'Philosophy', 'Space Law'];
+
+        const INITIAL_STATE = {
+            hasStarted: false,
+            name: "New Player",
+            gender: 'male',
+            money: 500,
+            age: 10,
+            week: 1,
+            health: 100,
+            happiness: 100,
+            isDead: false,
+            education: {
+                primary: 0, secondary: 0,
+                subjects: SUBJECTS.reduce((acc, s) => ({ ...acc, [s]: 0 }), {})
+            },
+            assets: { house: HOUSES[0], car: null, chain: null, ring: null, phone: null },
+            social: { followers: 0, likes: 0 },
+            logs: []
+        };
+
+        // --- COMPONENTS ---
+
+        const CharacterVisual = ({ state, scale = 1, showDetails = false }) => {
+            const { gender, assets } = state;
+            return React.createElement('div', { 
+                className: `relative flex flex-col items-center justify-center py-10 transition-all duration-500`,
+                style: { transform: `scale(${scale})` }
+            }, 
+                // Car behind
+                assets.car && React.createElement('div', { 
+                    className: "absolute -z-10 opacity-40 blur-[2px] translate-y-6"
+                }, 
+                    React.createElement('svg', { width: "220", height: "110", viewBox: "0 0 200 100" }, 
+                        React.createElement('path', { d: "M10 80 L30 45 L170 45 L190 80 L195 95 L5 95 Z", fill: assets.car.color }),
+                        React.createElement('circle', { cx: "45", cy: "90", r: "14", fill: "#111" }),
+                        React.createElement('circle', { cx: "155", cy: "90", r: "14", fill: "#111" })
+                    )
+                ),
+                // Character
+                React.createElement('div', { className: "relative z-10 animate-float" },
+                    // Head
+                    React.createElement('div', { className: "w-20 h-20 bg-[#ffdbac] rounded-full relative z-30 shadow-xl" },
+                        gender === 'female' ? 
+                            React.createElement('div', { className: "absolute top-0 w-full h-10 bg-[#3e2723] rounded-t-full -mt-2" }) : 
+                            React.createElement('div', { className: "absolute top-0 w-full h-3 bg-[#2d1a12] rounded-t-full" }),
+                        React.createElement('div', { className: "flex justify-around mt-8 px-5" },
+                            React.createElement('div', { className: "w-2.5 h-2.5 bg-black rounded-full" }),
+                            React.createElement('div', { className: "w-2.5 h-2.5 bg-black rounded-full" })
+                        )
+                    ),
+                    // Neck / Chain
+                    React.createElement('div', { className: "w-5 h-4 bg-[#ffdbac] mx-auto relative z-20 -mt-1" },
+                        assets.chain && React.createElement('div', { 
+                            className: "absolute top-1 left-[-6px] right-[-6px] h-3 rounded-b-full border-b-[3px]",
+                            style: { borderColor: assets.chain.color }
+                        })
+                    ),
+                    // Torso
+                    React.createElement('div', { className: "w-24 h-28 bg-zinc-50 rounded-t-3xl relative z-10 shadow-lg" },
+                        // Arms
+                        React.createElement('div', { className: "absolute -left-6 top-2 w-7 h-20 bg-[#ffdbac] rounded-full origin-top rotate-[20deg] flex flex-col items-center justify-end pb-2" },
+                            assets.ring && React.createElement('div', { className: "w-4 h-1.5 rounded-full mb-1 shadow-sm", style: { backgroundColor: assets.ring.color } })
+                        ),
+                        React.createElement('div', { className: "absolute -right-7 top-2 w-7 h-20 bg-[#ffdbac] rounded-full origin-top -rotate-[25deg] flex flex-col items-center justify-end pb-4" },
+                            assets.phone && React.createElement('div', { 
+                                className: "w-10 h-16 bg-black rounded-xl border border-zinc-800 shadow-2xl flex items-center justify-center -rotate-15 mb-2 overflow-hidden"
+                            }, React.createElement('div', { className: "w-full h-full bg-blue-500/20" }))
+                        )
+                    )
+                ),
+                showDetails && React.createElement('div', { className: "mt-4 text-center" },
+                    React.createElement('div', { className: "font-black text-xs uppercase tracking-widest opacity-40" }, "Protocol Identity"),
+                    React.createElement('div', { className: "text-xl font-black" }, state.name)
+                )
+            );
+        };
+
+        const ProgressBar = ({ value, max, color, icon: Icon }) => {
+            return React.createElement('div', { className: "flex items-center gap-2 w-full" },
+                Icon && React.createElement(Icon, { size: 14, className: "opacity-50" }),
+                React.createElement('div', { className: "h-2.5 bg-zinc-900 rounded-full overflow-hidden flex-1 border border-white/5" },
+                    React.createElement('div', { 
+                        className: "h-full transition-all duration-700 ease-out", 
+                        style: { width: `${Math.min(100, (value / max) * 100)}%`, backgroundColor: color }
+                    })
+                )
+            );
+        };
+
+        // --- MAIN APP ---
+
+        function App() {
+            const [state, setState] = useState(() => {
+                const saved = localStorage.getItem('chow_sim_u_v26');
+                return saved ? JSON.parse(saved) : INITIAL_STATE;
+            });
+            const [view, setView] = useState('home');
+            const [shopPage, setShopPage] = useState('iphones');
+            const [phoneApp, setPhoneApp] = useState(null);
+            const [aiQuery, setAiQuery] = useState('');
+            const [aiResponse, setAiResponse] = useState('');
+            const [isAiLoading, setIsAiLoading] = useState(false);
+
+            useEffect(() => {
+                localStorage.setItem('chow_sim_u_v26', JSON.stringify(state));
+                if (!state.isDead && (state.health <= 0 || state.happiness <= 0)) {
+                    setState(p => ({ ...p, isDead: true }));
+                }
+            }, [state]);
+
+            const log = (msg, type = 'info') => {
+                setState(p => ({ ...p, logs: [{ id: Date.now(), msg, type }, ...p.logs].slice(0, 5) }));
+            };
+
+            const tick = () => {
+                if (state.isDead) return;
+                setState(prev => ({
+                    ...prev,
+                    week: prev.week + 1 > 52 ? 1 : prev.week + 1,
+                    age: prev.week + 1 > 52 ? prev.age + 1 : prev.age,
+                    money: prev.money + (prev.age >= 18 ? 300 : 50),
+                    health: Math.max(0, prev.health - (prev.age > 50 ? 2 : 1)),
+                    happiness: Math.max(0, prev.happiness - 1)
+                }));
+            };
+
+            const doEducation = (type, sub = null) => {
+                if (state.isDead) return;
+                setState(prev => {
+                    let cost = 0, hMod = 0, hpMod = 0, mMod = 0;
+                    let nextEdu = { ...prev.education };
+                    if (type === 'primary') {
+                        if (prev.education.primary >= 60) return prev;
+                        nextEdu.primary += 1;
+                        mMod = 10; hpMod = 2; hMod = 2;
+                    } else if (type === 'secondary') {
+                        if (prev.education.primary < 60) { log("Need primary first!", "error"); return prev; }
+                        if (prev.education.secondary >= 60) return prev;
+                        nextEdu.secondary += 1;
+                        mMod = 10; hpMod = 2; hMod = 2;
+                    } else if (type === 'subject') {
+                        if (prev.education.secondary < 60) { log("Need secondary first!", "error"); return prev; }
+                        nextEdu.subjects[sub] = (nextEdu.subjects[sub] || 0) + 1;
+                        cost = 10; hpMod = -2; hMod = -2;
+                    }
+                    return {
+                        ...prev,
+                        money: prev.money + mMod - cost,
+                        health: Math.min(100, Math.max(0, prev.health + hMod)),
+                        happiness: Math.min(100, Math.max(0, prev.happiness + hpMod)),
+                        education: nextEdu
+                    };
+                });
+            };
+
+            const buy = (cat, item) => {
+                if (state.money < item.price) { log("No money!", "error"); return; }
+                setState(p => ({
+                    ...p, money: p.money - item.price, assets: { ...p.assets, [cat]: item }, happiness: Math.min(100, p.happiness + 10)
+                }));
+                log(`Bought ${item.name}!`, "success");
+            };
+
+            const handleAi = async () => {
+                if (!aiQuery || isAiLoading) return;
+                setIsAiLoading(true);
+                setAiResponse("Connecting to Chow AI...");
+                try {
+                    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+                    const response = await ai.models.generateContent({
+                        model: 'gemini-3-flash-preview',
+                        contents: aiQuery,
+                        config: { systemInstruction: "You are Chow AI. Be brief." }
+                    });
+                    setAiResponse(response.text);
+                } catch (err) { setAiResponse("Signal lost."); }
+                setIsAiLoading(false);
+            };
+
+            if (state.isDead) {
+                return React.createElement('div', { className: "min-h-screen flex flex-col items-center justify-center p-12 text-center dead-screen" },
+                    React.createElement(Lucide.Skull, { size: 64, className: "text-red-500 mb-6" }),
+                    React.createElement('h1', { className: "text-7xl font-black mb-2 tracking-tighter uppercase italic" }, "Wasted"),
+                    React.createElement('p', { className: "text-zinc-500 font-bold mb-12" }, "Your vitality has reached absolute zero."),
+                    React.createElement('button', { 
+                        onClick: () => { localStorage.removeItem('chow_sim_u_v26'); window.location.reload(); },
+                        className: "bg-white text-black px-12 py-5 rounded-2xl font-black text-xl active:scale-95"
+                    }, "New Life")
+                );
             }
 
-            return {
-                ...prev,
-                money: prev.money + mMod - cost,
-                health: Math.min(100, Math.max(0, prev.health + hMod)),
-                happiness: Math.min(100, Math.max(0, prev.happiness + hpMod)),
-                education: nextEdu
-            };
-        });
-    };
+            if (!state.hasStarted) {
+                return React.createElement('div', { className: "min-h-screen bg-black flex flex-col items-center justify-center p-8" },
+                    React.createElement('div', { className: "w-full max-w-sm glass p-10 rounded-[50px] text-center" },
+                        React.createElement('h1', { className: "text-5xl font-black mb-1" }, "CHOW SIM"),
+                        React.createElement('p', { className: "text-[10px] font-black uppercase tracking-[0.4em] text-blue-500 mb-10" }, "iOS 26 Ultimate"),
+                        React.createElement('input', { 
+                            className: "w-full bg-white/5 border border-white/10 p-6 rounded-3xl mb-4 font-bold text-center",
+                            placeholder: "NAME", value: state.name, onChange: e => setState(p => ({...p, name: e.target.value}))
+                        }),
+                        React.createElement('button', { 
+                            className: "w-full bg-blue-600 p-6 rounded-3xl font-black text-xl shadow-lg active:scale-95",
+                            onClick: () => setState(p => ({...p, hasStarted: true}))
+                        }, "Initialize")
+                    )
+                );
+            }
 
-    const purchase = (cat, item) => {
-        if (state.money < item.price) { log("Insufficient funds!", "error"); return; }
-        setState(p => ({
-            ...p,
-            money: p.money - item.price,
-            assets: { ...p.assets, [cat]: item },
-            happiness: Math.min(100, p.happiness + 15)
-        }));
-        log(`Acquired: ${item.name}`, "success");
-    };
+            return React.createElement('div', { className: "min-h-screen flex flex-col" },
+                // Header
+                React.createElement('header', { className: "p-6 pt-14 glass border-b border-white/5" },
+                    React.createElement('div', { className: "flex justify-between items-end mb-5" },
+                        React.createElement('div', null,
+                            React.createElement('h1', { className: "text-2xl font-black leading-none" }, state.name),
+                            React.createElement('div', { className: "text-[10px] font-black opacity-40 uppercase tracking-widest mt-1" }, `Age ${state.age} / Week ${state.week}`)
+                        ),
+                        React.createElement('div', { className: "text-3xl font-black tabular-nums" }, `£${state.money.toLocaleString()}`)
+                    ),
+                    React.createElement('div', { className: "grid grid-cols-2 gap-6" },
+                        React.createElement(ProgressBar, { value: state.health, max: 100, color: "#ef4444", icon: Lucide.Heart }),
+                        React.createElement(ProgressBar, { value: state.happiness, max: 100, color: "#eab308", icon: Lucide.Smile })
+                    )
+                ),
 
-    const handleAi = async () => {
-        if (!aiQuery || isAiLoading) return;
-        setIsAiLoading(true);
-        setAiResponse("Connecting to Chow Neural Link...");
-        try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const response = await ai.models.generateContent({
-                model: 'gemini-3-flash-preview',
-                contents: aiQuery,
-                config: { systemInstruction: "You are Chow AI, a futuristic and helpful virtual assistant. Keep responses brief." }
-            });
-            setAiResponse(response.text);
-        } catch (err) {
-            setAiResponse("Signal interrupted. Verify your network.");
+                // Main Content
+                React.createElement('main', { className: "flex-1 overflow-y-auto p-5 pb-44 no-scrollbar" },
+                    view === 'home' && React.createElement('div', { className: "space-y-6" },
+                        React.createElement('div', { className: "glass p-10 rounded-[60px] flex flex-col items-center border border-white/10" },
+                            React.createElement(CharacterVisual, { state, scale: 1.5 })
+                        ),
+                        React.createElement('div', { className: "grid grid-cols-2 gap-4" },
+                            React.createElement('button', { onClick: () => setView('darkweb'), className: "glass p-8 rounded-[40px] flex flex-col items-center gap-3 active:scale-95" },
+                                React.createElement(Lucide.Skull, { size: 32, className: "text-red-500" }),
+                                React.createElement('span', { className: "font-black text-[11px] uppercase" }, "Dark Web")
+                            ),
+                            React.createElement('button', { onClick: tick, className: "glass p-8 rounded-[40px] flex flex-col items-center gap-3 active:scale-95" },
+                                React.createElement(Lucide.Plus, { size: 32, className: "text-blue-500" }),
+                                React.createElement('span', { className: "font-black text-[11px] uppercase" }, "Next Week")
+                            )
+                        ),
+                        state.logs.map(l => React.createElement('div', { key: l.id, className: "p-4 rounded-3xl glass text-xs font-bold" }, 
+                            React.createElement('span', { className: l.type === 'error' ? 'text-red-500' : 'text-emerald-500' }, "▶ "), l.msg
+                        ))
+                    ),
+
+                    view === 'darkweb' && React.createElement('div', { className: "space-y-6" },
+                        React.createElement('button', { onClick: () => setView('home') }, React.createElement(Lucide.ArrowLeft)),
+                        React.createElement('h2', { className: "text-4xl font-black" }, "Dark Web"),
+                        ['Raid Server', 'Crypto Theft', 'Identity Sale'].map(op => React.createElement('button', { 
+                            key: op, className: "glass p-7 rounded-[40px] w-full flex justify-between items-center" 
+                        }, React.createElement('span', { className: "font-black" }, op), React.createElement('div', { className: "bg-red-600 text-[10px] px-4 py-1 rounded-full font-black" }, "HIGH RISK")))
+                    ),
+
+                    view === 'academy' && React.createElement('div', { className: "space-y-8" },
+                        React.createElement('h2', { className: "text-4xl font-black" }, "Academy"),
+                        React.createElement('div', { className: "glass p-8 rounded-[45px]" },
+                            React.createElement('div', { className: "flex justify-between mb-2" }, React.createElement('span', { className: "font-black" }, "Primary"), React.createElement('span', null, `${state.education.primary}/60`)),
+                            React.createElement(ProgressBar, { value: state.education.primary, max: 60, color: "#10b981" }),
+                            React.createElement('button', { className: "w-full bg-white text-black font-black mt-4 py-4 rounded-3xl", onClick: () => doEducation('primary') }, "Study (+£10 / +Stats)")
+                        ),
+                        React.createElement('div', { className: "glass p-8 rounded-[45px]" },
+                            React.createElement('div', { className: "flex justify-between mb-2" }, React.createElement('span', { className: "font-black" }, "Secondary"), React.createElement('span', null, `${state.education.secondary}/60`)),
+                            React.createElement(ProgressBar, { value: state.education.secondary, max: 60, color: "#3b82f6" }),
+                            React.createElement('button', { className: "w-full bg-white text-black font-black mt-4 py-4 rounded-3xl", onClick: () => doEducation('secondary') }, "Study (+£10 / +Stats)")
+                        ),
+                        React.createElement('div', { className: "grid grid-cols-2 gap-4" }, SUBJECTS.map(s => React.createElement('button', { 
+                            key: s, onClick: () => doEducation('subject', s), className: "glass p-4 rounded-3xl text-left" 
+                        }, React.createElement('div', { className: "font-black text-sm" }, s), React.createElement('div', { className: "text-[10px] text-red-500 font-black mt-1" }, "-£10 / -2 Stats"))))
+                    ),
+
+                    view === 'shop' && React.createElement('div', { className: "space-y-6" },
+                        React.createElement('div', { className: "flex gap-2 overflow-x-auto pb-4" }, ['iphones', 'samsungs', 'cars', 'houses', 'chains', 'rings'].map(p => React.createElement('button', { 
+                            key: p, onClick: () => setShopPage(p), className: `px-6 py-2 rounded-full font-black uppercase text-xs border ${shopPage === p ? 'bg-white text-black' : 'glass opacity-50'}` 
+                        }, p))),
+                        React.createElement('div', { className: "grid gap-4" },
+                            shopPage === 'iphones' && IPHONES.map(i => React.createElement('button', { key: i.id, onClick: () => buy('phone', i), className: "glass p-6 rounded-[35px] flex justify-between" }, i.name, React.createElement('span', { className: "text-green-500 font-black" }, `£${i.price.toLocaleString()}`))),
+                            shopPage === 'samsungs' && SAMSUNGS.map(i => React.createElement('button', { key: i.id, onClick: () => buy('phone', i), className: "glass p-6 rounded-[35px] flex justify-between" }, i.name, React.createElement('span', { className: "text-green-500 font-black" }, `£${i.price.toLocaleString()}`))),
+                            shopPage === 'cars' && CARS.map(i => React.createElement('button', { key: i.id, onClick: () => buy('car', i), className: "glass p-6 rounded-[35px] flex justify-between" }, React.createElement('div', { className: "w-8 h-4 rounded", style: { backgroundColor: i.color } }), i.name, React.createElement('span', { className: "text-green-500 font-black" }, `£${i.price.toLocaleString()}`))),
+                            shopPage === 'houses' && HOUSES.map(i => React.createElement('button', { key: i.id, onClick: () => buy('house', i), className: "glass p-6 rounded-[35px] flex justify-between" }, i.name, React.createElement('span', { className: "text-green-500 font-black" }, `£${i.price.toLocaleString()}`))),
+                            shopPage === 'chains' && CHAINS.map(i => React.createElement('button', { key: i.id, onClick: () => buy('chain', i), className: "glass p-6 rounded-[35px] flex justify-between items-center" }, React.createElement('div', { className: "w-6 h-6 rounded-full", style: { background: i.color } }), i.name, `£${i.price}`)),
+                            shopPage === 'rings' && RINGS.map(i => React.createElement('button', { key: i.id, onClick: () => buy('ring', i), className: "glass p-6 rounded-[35px] flex justify-between items-center" }, React.createElement('div', { className: "w-4 h-4 rounded-full border-2", style: { borderColor: i.color } }), i.name, `£${i.price}`))
+                        )
+                    ),
+
+                    view === 'phone' && React.createElement('div', { className: "h-full flex flex-col" },
+                        !phoneApp ? React.createElement('div', { className: "grid grid-cols-4 gap-8 p-10" },
+                            ['App Store', 'ChowTok', 'Chow Chat', 'Chow AI'].map(app => React.createElement('button', { 
+                                key: app, onClick: () => setPhoneApp(app.toLowerCase().replace(' ', '')), className: "flex flex-col items-center gap-2" 
+                            }, React.createElement('div', { className: "w-16 h-16 bg-zinc-800 rounded-3xl" }), React.createElement('span', { className: "text-[10px] font-black" }, app)))
+                        ) : React.createElement('div', { className: "glass flex-1 rounded-[50px] p-8" },
+                            React.createElement('button', { onClick: () => setPhoneApp(null) }, React.createElement(Lucide.ChevronLeft)),
+                            phoneApp === 'chowai' && React.createElement('div', { className: "mt-4" },
+                                React.createElement('p', { className: "text-xs opacity-50 mb-2" }, "Neural Hub Ready"),
+                                aiResponse && React.createElement('div', { className: "bg-blue-600/20 p-4 rounded-2xl mb-4 text-sm" }, aiResponse),
+                                React.createElement('div', { className: "flex gap-2" },
+                                    React.createElement('input', { className: "flex-1 glass p-4 rounded-2xl", placeholder: "Query...", value: aiQuery, onChange: e => setAiQuery(e.target.value) }),
+                                    React.createElement('button', { onClick: handleAi, className: "bg-blue-600 p-4 rounded-2xl" }, React.createElement(Lucide.Send))
+                                )
+                            ),
+                            phoneApp === 'chowtok' && React.createElement('div', { className: "flex flex-col items-center py-20" }, React.createElement('h3', { className: "text-4xl font-black" }, state.social.followers), React.createElement('p', null, "Followers"), React.createElement('button', { onClick: () => setState(p => ({...p, social: {...p.social, followers: p.social.followers + 100}})), className: "mt-8 bg-white text-black px-8 py-3 rounded-full font-black" }, "Post Clip"))
+                        )
+                    ),
+
+                    view === 'profile' && React.createElement('div', { className: "flex flex-col items-center" },
+                        React.createElement('div', { className: "glass p-10 rounded-[65px] w-full items-center flex flex-col" },
+                            React.createElement(CharacterVisual, { state, scale: 1.6 }),
+                            React.createElement('div', { className: "mt-12 text-center" }, React.createElement('h2', { className: "text-3xl font-black" }, state.name), React.createElement('p', { className: "opacity-40" }, `Citizen Age ${state.age}`))
+                        )
+                    )
+                ),
+
+                // Bottom Nav
+                React.createElement('nav', { className: "fixed bottom-0 left-0 right-0 glass pb-12 pt-5 px-8 flex justify-between items-center" },
+                    React.createElement(NavBtn, { icon: Lucide.GraduationCap, label: "Academy", active: view === 'academy', onClick: () => setView('academy') }),
+                    React.createElement(NavBtn, { icon: Lucide.Home, label: "Home", active: view === 'home', onClick: () => setView('home') }),
+                    state.assets.phone && React.createElement(NavBtn, { icon: Lucide.Smartphone, label: "iPhone", active: view === 'phone', onClick: () => { setView('phone'); setPhoneApp(null); } }),
+                    React.createElement(NavBtn, { icon: Lucide.ShoppingCart, label: "Shop", active: view === 'shop', onClick: () => setView('shop') }),
+                    React.createElement('button', { onClick: () => setView('profile'), className: "flex flex-col items-center gap-1 opacity-60" }, 
+                        React.createElement('div', { className: "w-10 h-10 rounded-full border-2 overflow-hidden" }, React.createElement(CharacterVisual, { state, scale: 0.3 })),
+                        React.createElement('span', { className: "text-[8px] font-black uppercase" }, "Profile")
+                    )
+                )
+            );
         }
-        setIsAiLoading(false);
-    };
 
-    // --- RENDER HELPERS ---
-
-    // Fix: Make 'onClick' optional via default value to satisfy TypeScript-like missing prop requirements at lines 650, 654, 655, and 656
-    const NavBtn = ({ icon: Icon, label, id, onClick = undefined }) => (
-        <button onClick={onClick || (() => setView(id))} 
-                className={`flex flex-col items-center gap-1 transition-all duration-300 ${view === id ? 'text-blue-500 scale-110' : 'opacity-40 hover:opacity-100'}`}>
-            <Icon size={26} strokeWidth={view === id ? 3 : 2} />
-            <span className="text-[9px] font-black uppercase tracking-tighter">{label}</span>
-        </button>
-    );
-
-    if (state.isDead) {
-        return (
-            <div className="min-h-screen bg-black flex flex-col items-center justify-center p-12 text-center animate-in fade-in duration-1000">
-                <Lucide.Skull size={64} className="text-red-500 mb-6" />
-                <h1 className="text-7xl font-black mb-2 tracking-tighter uppercase italic">Wasted</h1>
-                <p className="text-zinc-500 font-bold mb-12">Biological systems terminated. Vital stats reached critical zero.</p>
-                <button onClick={() => { localStorage.removeItem('chow_sim_ios26_v1'); window.location.reload(); }} 
-                        className="bg-white text-black px-12 py-5 rounded-2xl font-black text-xl hover:scale-105 active:scale-95 transition-all shadow-2xl">
-                    Re-Initialize Protocol
-                </button>
-            </div>
+        const NavBtn = ({ icon: Icon, label, active, onClick }) => (
+            React.createElement('button', { onClick, className: `flex flex-col items-center gap-1 transition-all ${active ? 'text-blue-500 scale-110' : 'opacity-40'}` },
+                React.createElement(Icon, { size: 28, strokeWidth: active ? 3 : 2 }),
+                React.createElement('span', { className: "text-[8px] font-black uppercase tracking-tighter" }, label)
+            )
         );
-    }
 
-    if (!state.hasStarted) {
-        return (
-            <div className="min-h-screen bg-black flex flex-col items-center justify-center p-8">
-                <div className="w-full max-w-sm glass p-10 rounded-[50px] text-center shadow-2xl">
-                    <h1 className="text-5xl font-black mb-1 tracking-tighter">CHOW SIM</h1>
-                    <p className="text-[10px] font-black uppercase tracking-[0.4em] text-blue-500 mb-10">iOS 26 Ultimate</p>
-                    <input className="w-full bg-white/5 border border-white/10 p-6 rounded-3xl mb-4 font-bold text-center text-lg" 
-                           placeholder="IDENTITY NAME" value={state.name} onChange={e => setState(p => ({...p, name: e.target.value}))} />
-                    <div className="grid grid-cols-2 gap-4 mb-10">
-                        <button className={`p-5 rounded-2xl font-black transition-all ${state.gender === 'male' ? 'bg-white text-black' : 'bg-white/5 opacity-50'}`} 
-                                onClick={() => setState(p => ({...p, gender: 'male'}))}>MALE</button>
-                        <button className={`p-5 rounded-2xl font-black transition-all ${state.gender === 'female' ? 'bg-white text-black' : 'bg-white/5 opacity-50'}`} 
-                                onClick={() => setState(p => ({...p, gender: 'female'}))}>FEMALE</button>
-                    </div>
-                    <button className="w-full bg-blue-600 p-6 rounded-3xl font-black text-xl shadow-lg active:scale-95 transition-all" 
-                            onClick={() => setState(p => ({...p, hasStarted: true}))}>BEGIN LIFE</button>
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="min-h-screen flex flex-col">
-            {/* iOS Status Header */}
-            <header className="p-6 pt-14 glass z-50 border-b border-white/5">
-                <div className="flex justify-between items-end mb-5">
-                    <div>
-                        <h1 className="text-2xl font-black tracking-tight leading-none">{state.name}</h1>
-                        <div className="text-[10px] font-black opacity-40 uppercase tracking-widest mt-1">Age {state.age} / Week {state.week}</div>
-                    </div>
-                    <div className="text-3xl font-black tabular-nums">£{state.money.toLocaleString()}</div>
-                </div>
-                <div className="grid grid-cols-2 gap-6">
-                    <ProgressBar value={state.health} max={100} color="#ef4444" icon={Lucide.Heart} />
-                    <ProgressBar value={state.happiness} max={100} color="#eab308" icon={Lucide.Smile} />
-                </div>
-            </header>
-
-            {/* Main Application Frame */}
-            <main className="flex-1 overflow-y-auto p-5 pb-44 no-scrollbar">
-                
-                {view === 'home' && (
-                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom duration-500">
-                        <div className="glass p-10 rounded-[60px] flex flex-col items-center ios-shadow border border-white/10">
-                            <CharacterVisual state={state} scale={1.5} />
-                            <div className="mt-8 text-center bg-white/5 px-8 py-3 rounded-full">
-                                <div className="text-[9px] font-black opacity-30 uppercase tracking-widest">Occupation</div>
-                                <div className="text-lg font-black tracking-tighter">{state.age < 18 ? 'Academy Student' : 'Protocol Citizen'}</div>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <button onClick={() => setView('darkweb')} className="glass p-8 rounded-[40px] flex flex-col items-center gap-3 border border-red-500/20 active:scale-95 transition-all">
-                                <Lucide.Skull size={32} className="text-red-500" />
-                                <span className="font-black text-[11px] uppercase tracking-widest text-red-400">Dark Web</span>
-                            </button>
-                            <button onClick={tick} className="glass p-8 rounded-[40px] flex flex-col items-center gap-3 border border-blue-500/20 active:scale-95 transition-all">
-                                <Lucide.Plus size={32} className="text-blue-500" />
-                                <span className="font-black text-[11px] uppercase tracking-widest text-blue-400">Next Week</span>
-                            </button>
-                        </div>
-
-                        <div className="space-y-2">
-                            {state.logs.map(l => (
-                                <div key={l.id} className="p-4 rounded-3xl glass text-xs font-bold border border-white/5 animate-in slide-in-from-left">
-                                    <span className={l.type === 'error' ? 'text-red-500' : 'text-emerald-500'}>▶ </span> {l.msg}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {view === 'academy' && (
-                    <div className="space-y-8 animate-in slide-in-from-bottom duration-500">
-                        <h2 className="text-4xl font-black tracking-tighter">Campus</h2>
-                        
-                        <div className="space-y-5">
-                            <div className="glass p-8 rounded-[45px] border border-white/10 shadow-xl">
-                                <div className="flex justify-between items-end mb-4">
-                                    <span className="font-black text-xl uppercase tracking-tighter">Primary Education</span>
-                                    <span className="text-xs font-black text-emerald-400">{state.education.primary}/60</span>
-                                </div>
-                                <ProgressBar value={state.education.primary} max={60} color="#10b981" />
-                                <button className="w-full bg-white text-black font-black mt-6 py-5 rounded-3xl active:scale-95 disabled:opacity-30 transition-all" 
-                                        disabled={state.education.primary >= 60} onClick={() => study('primary')}>
-                                    Attend (+£10 / +2 Stats)
-                                </button>
-                            </div>
-
-                            <div className="glass p-8 rounded-[45px] border border-white/10 shadow-xl">
-                                <div className="flex justify-between items-end mb-4">
-                                    <span className="font-black text-xl uppercase tracking-tighter">Secondary Academy</span>
-                                    <span className="text-xs font-black text-blue-400">{state.education.secondary}/60</span>
-                                </div>
-                                <ProgressBar value={state.education.secondary} max={60} color="#3b82f6" />
-                                <button className="w-full bg-white text-black font-black mt-6 py-5 rounded-3xl active:scale-95 disabled:opacity-30 transition-all" 
-                                        disabled={state.education.primary < 60 || state.education.secondary >= 60} onClick={() => study('secondary')}>
-                                    Study (+£10 / +2 Stats)
-                                </button>
-                            </div>
-                        </div>
-
-                        <section>
-                            <h3 className="text-[10px] font-black uppercase tracking-widest opacity-30 mb-6">Degree Programs</h3>
-                            <div className="grid grid-cols-2 gap-4">
-                                {SUBJECTS.map(s => (
-                                    <button key={s} className="glass p-6 rounded-[30px] flex flex-col gap-2 border border-white/5 active:bg-white/10 transition-all" 
-                                            onClick={() => study('subject', s)}>
-                                        <span className="font-black text-sm tracking-tighter">{s}</span>
-                                        <div className="flex justify-between w-full items-center mt-2">
-                                            <span className="text-[10px] font-black opacity-40 uppercase">Lv {state.education.subjects[s] || 0}</span>
-                                            <span className="text-[10px] font-black text-red-500 italic">-£10 / -2 Stats</span>
-                                        </div>
-                                    </button>
-                                ))}
-                            </div>
-                        </section>
-                    </div>
-                )}
-
-                {view === 'shop' && (
-                    <div className="space-y-6">
-                        <div className="flex overflow-x-auto gap-3 pb-4 no-scrollbar -mx-5 px-5">
-                            {['iphones', 'samsungs', 'cars', 'houses', 'chains', 'rings'].map(p => (
-                                <button key={p} onClick={() => setShopPage(p)} 
-                                        className={`px-8 py-2.5 rounded-full font-black text-xs uppercase tracking-[0.2em] whitespace-nowrap transition-all border ${shopPage === p ? 'bg-white text-black border-white' : 'glass border-white/10 opacity-50'}`}>
-                                    {p}
-                                </button>
-                            ))}
-                        </div>
-
-                        <div className="grid gap-4 animate-in fade-in zoom-in duration-300">
-                            {shopPage === 'iphones' && IPHONES.map(item => (
-                                <button key={item.id} onClick={() => purchase('phone', item)} className="glass p-7 rounded-[40px] flex justify-between items-center border border-white/5 active:scale-95 transition-all">
-                                    <div className="flex items-center gap-5 text-left">
-                                        <Lucide.Smartphone size={30} className="opacity-40" />
-                                        <div>
-                                            <div className="font-black text-lg tracking-tighter leading-none mb-1">{item.name}</div>
-                                            <div className="text-[10px] font-black opacity-30 uppercase tracking-widest">{item.brand}</div>
-                                        </div>
-                                    </div>
-                                    <span className="text-emerald-500 font-black text-lg">£{item.price.toLocaleString()}</span>
-                                </button>
-                            ))}
-                            {shopPage === 'samsungs' && SAMSUNGS.map(item => (
-                                <button key={item.id} onClick={() => purchase('phone', item)} className="glass p-7 rounded-[40px] flex justify-between items-center border border-white/5 active:scale-95 transition-all">
-                                    <div className="flex items-center gap-5 text-left">
-                                        <Lucide.Tablet size={30} className="opacity-40" />
-                                        <div>
-                                            <div className="font-black text-lg tracking-tighter leading-none mb-1">{item.name}</div>
-                                            <div className="text-[10px] font-black opacity-30 uppercase tracking-widest">{item.brand}</div>
-                                        </div>
-                                    </div>
-                                    <span className="text-emerald-500 font-black text-lg">£{item.price.toLocaleString()}</span>
-                                </button>
-                            ))}
-                            {shopPage === 'cars' && CARS.map(item => (
-                                <button key={item.id} onClick={() => purchase('car', item)} className="glass p-7 rounded-[40px] flex justify-between items-center border border-white/5 active:scale-95 transition-all">
-                                    <div className="flex items-center gap-5 text-left">
-                                        <div className="w-14 h-6 rounded-lg shadow-xl" style={{ backgroundColor: item.color }} />
-                                        <div>
-                                            <div className="font-black text-lg tracking-tighter leading-none mb-1">{item.name}</div>
-                                            <div className="text-[10px] font-black opacity-30 uppercase tracking-widest">Motors</div>
-                                        </div>
-                                    </div>
-                                    <span className="text-emerald-500 font-black text-lg">£{item.price.toLocaleString()}</span>
-                                </button>
-                            ))}
-                            {shopPage === 'houses' && HOUSES.map(item => (
-                                <button key={item.id} onClick={() => purchase('house', item)} className="glass p-7 rounded-[40px] flex justify-between items-center border border-white/5 active:scale-95 transition-all">
-                                    <div className="flex items-center gap-5 text-left">
-                                        <Lucide.Home size={30} className="opacity-40" />
-                                        <div>
-                                            <div className="font-black text-lg tracking-tighter leading-none mb-1">{item.name}</div>
-                                            <div className="text-[10px] font-black opacity-30 uppercase tracking-widest">Real Estate</div>
-                                        </div>
-                                    </div>
-                                    <span className="text-emerald-500 font-black text-lg">£{item.price.toLocaleString()}</span>
-                                </button>
-                            ))}
-                            {shopPage === 'chains' && CHAINS.map(item => (
-                                <button key={item.id} onClick={() => purchase('chain', item)} className="glass p-7 rounded-[40px] flex justify-between items-center border border-white/5 active:scale-95 transition-all">
-                                    <div className="flex items-center gap-5 text-left">
-                                        <div className="w-12 h-12 rounded-full" style={{ background: item.color }} />
-                                        <div>
-                                            <div className="font-black text-lg tracking-tighter leading-none mb-1">{item.name}</div>
-                                            <div className="text-[10px] font-black opacity-30 uppercase tracking-widest">Luxury</div>
-                                        </div>
-                                    </div>
-                                    <span className="text-emerald-500 font-black text-lg">£{item.price.toLocaleString()}</span>
-                                </button>
-                            ))}
-                            {shopPage === 'rings' && RINGS.map(item => (
-                                <button key={item.id} onClick={() => purchase('ring', item)} className="glass p-7 rounded-[40px] flex justify-between items-center border border-white/5 active:scale-95 transition-all">
-                                    <div className="flex items-center gap-5 text-left">
-                                        <div className="w-10 h-10 rounded-full border-[4px]" style={{ borderColor: item.color }} />
-                                        <div>
-                                            <div className="font-black text-lg tracking-tighter leading-none mb-1">{item.name}</div>
-                                            <div className="text-[10px] font-black opacity-30 uppercase tracking-widest">Ring</div>
-                                        </div>
-                                    </div>
-                                    <span className="text-emerald-500 font-black text-lg">£{item.price.toLocaleString()}</span>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {view === 'profile' && (
-                    <div className="space-y-10 animate-in slide-in-from-right duration-500 text-right">
-                        <h2 className="text-4xl font-black tracking-tighter">Identity</h2>
-                        <div className="glass p-10 rounded-[65px] flex flex-col items-center ios-shadow border border-white/10">
-                            <CharacterVisual state={state} scale={1.6} />
-                            <h3 className="text-4xl font-black mt-12 tracking-tighter">{state.name}</h3>
-                            <div className="flex gap-3 mt-5">
-                                <span className="bg-white/10 px-6 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest">{state.gender}</span>
-                                <span className="bg-blue-600 px-6 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest">Citizen Level {state.age}</span>
-                            </div>
-                            
-                            <div className="w-full mt-12 grid grid-cols-2 gap-5 text-center">
-                                <div className="p-6 bg-white/5 rounded-[35px] border border-white/5">
-                                    <div className="text-[9px] font-black opacity-20 uppercase mb-2">Primary Asset</div>
-                                    <div className="text-sm font-black truncate">{state.assets.house.name}</div>
-                                </div>
-                                <div className="p-6 bg-white/5 rounded-[35px] border border-white/5">
-                                    <div className="text-[9px] font-black opacity-20 uppercase mb-2">Fleet</div>
-                                    <div className="text-sm font-black truncate">{state.assets.car?.name || 'On Foot'}</div>
-                                </div>
-                                <div className="p-6 bg-white/5 rounded-[35px] border border-white/5 col-span-2">
-                                    <div className="text-[9px] font-black opacity-20 uppercase mb-2">Total Value</div>
-                                    <div className="text-xl font-black text-emerald-400">£{(state.money + (state.assets.car?.price || 0) + (state.assets.house.price || 0)).toLocaleString()}</div>
-                                </div>
-                            </div>
-
-                            <button className="mt-14 text-red-500/40 hover:text-red-500 text-[10px] font-black uppercase tracking-[0.3em] active:scale-95 transition-all" 
-                                    onClick={() => { if(confirm("Terminate protocol and start new life?")) { localStorage.removeItem('chow_sim_ios26_v1'); window.location.reload(); } }}>
-                                Terminate Protocol
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                {view === 'phone' && (
-                    <div className="h-full flex flex-col items-center animate-in slide-in-from-bottom duration-600">
-                        {!phoneApp ? (
-                            <>
-                                <div className="mt-24 flex flex-col items-center drop-shadow-2xl">
-                                    <h2 className="text-8xl font-thin tracking-tighter mb-1">12:00</h2>
-                                    <p className="text-xl font-medium opacity-50 tracking-widest uppercase">Protocol Active</p>
-                                </div>
-                                <div className="grid grid-cols-4 gap-8 mt-24 p-8 w-full">
-                                    <button onClick={() => setPhoneApp('store')} className="flex flex-col items-center gap-1.5">
-                                        <div className="w-16 h-16 bg-blue-500 rounded-3xl flex items-center justify-center text-white shadow-xl active:scale-90 transition-transform"><Lucide.ShoppingBag size={32} /></div>
-                                        <span className="text-[10px] font-black opacity-60 uppercase tracking-tighter">App Store</span>
-                                    </button>
-                                    <button onClick={() => setPhoneApp('tok')} className="flex flex-col items-center gap-1.5">
-                                        <div className="w-16 h-16 bg-black border border-white/10 rounded-3xl flex items-center justify-center text-white shadow-xl active:scale-90 transition-transform"><Lucide.Video size={32} /></div>
-                                        <span className="text-[10px] font-black opacity-60 uppercase tracking-tighter">ChowTok</span>
-                                    </button>
-                                    <button onClick={() => setPhoneApp('chat')} className="flex flex-col items-center gap-1.5">
-                                        <div className="w-16 h-16 bg-emerald-500 rounded-3xl flex items-center justify-center text-white shadow-xl active:scale-90 transition-transform"><Lucide.MessageSquare size={32} /></div>
-                                        <span className="text-[10px] font-black opacity-60 uppercase tracking-tighter">Chow Chat</span>
-                                    </button>
-                                    <button onClick={() => setPhoneApp('ai')} className="flex flex-col items-center gap-1.5">
-                                        <div className="w-16 h-16 bg-gradient-to-tr from-purple-600 to-indigo-600 rounded-3xl flex items-center justify-center text-white shadow-xl active:scale-90 transition-transform"><Lucide.Zap size={32} /></div>
-                                        <span className="text-[10px] font-black opacity-60 uppercase tracking-tighter">Chow AI</span>
-                                    </button>
-                                </div>
-                            </>
-                        ) : (
-                            <div className="w-full flex flex-col h-full bg-black/95 rounded-[50px] border border-white/10 overflow-hidden ios-shadow relative">
-                                <header className="p-7 border-b border-white/5 flex items-center justify-between glass">
-                                    <button onClick={() => setPhoneApp(null)} className="p-2"><Lucide.ChevronLeft /></button>
-                                    <span className="font-black uppercase text-xs tracking-widest">{phoneApp}</span>
-                                    <div className="w-10" />
-                                </header>
-                                
-                                <div className="flex-1 overflow-y-auto p-7 no-scrollbar">
-                                    {phoneApp === 'ai' && (
-                                        <div className="flex flex-col h-full">
-                                            <div className="flex-1 space-y-5 mb-5 overflow-y-auto max-h-[450px] no-scrollbar">
-                                                <div className="bg-white/5 p-5 rounded-[28px] border border-white/5">
-                                                    <p className="text-[10px] font-black opacity-30 uppercase tracking-widest mb-2">Neural Hub</p>
-                                                    <p className="text-sm leading-relaxed">System identity confirmed. How can I assist your biological evolution today?</p>
-                                                </div>
-                                                {aiResponse && (
-                                                    <div className="bg-blue-600/10 p-5 rounded-[28px] border border-blue-600/20 ml-8 animate-in slide-in-from-right shadow-lg">
-                                                        <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-2">Chow AI Output</p>
-                                                        <p className="text-sm leading-relaxed">{aiResponse}</p>
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="flex gap-3 p-2 glass rounded-[30px] border border-white/10">
-                                                <input className="flex-1 bg-transparent p-4 text-sm font-bold" 
-                                                       placeholder="Command Link..." value={aiQuery} onChange={e => setAiQuery(e.target.value)} 
-                                                       onKeyDown={e => e.key === 'Enter' && handleAi()} />
-                                                <button className="bg-blue-600 w-12 h-12 rounded-[22px] flex items-center justify-center active:scale-90 transition-all" 
-                                                        onClick={handleAi} disabled={isAiLoading}>
-                                                    {isAiLoading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Lucide.ArrowUp size={20} />}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {phoneApp === 'tok' && (
-                                        <div className="flex flex-col items-center gap-10 py-12">
-                                            <div className="w-40 h-40 rounded-full bg-gradient-to-br from-pink-500 via-red-500 to-yellow-500 p-1 shadow-2xl animate-pulse">
-                                                <div className="w-full h-full bg-black rounded-full flex items-center justify-center font-black text-4xl italic tracking-tighter">CHOW</div>
-                                            </div>
-                                            <div className="text-center space-y-1">
-                                                <div className="text-5xl font-black tracking-tighter">{state.social.followers.toLocaleString()}</div>
-                                                <div className="text-[10px] font-black opacity-30 uppercase tracking-[0.5em]">Global Fans</div>
-                                            </div>
-                                            <button className="w-full bg-white text-black font-black py-6 rounded-[28px] active:scale-95 shadow-xl transition-all uppercase tracking-widest text-sm" 
-                                                    onClick={() => setState(p => ({...p, social: { ...p.social, followers: p.social.followers + 250 }}))}>Viral Post (+250)</button>
-                                        </div>
-                                    )}
-                                    {phoneApp === 'store' && (
-                                        <div className="space-y-5">
-                                            <div className="flex items-center justify-between p-5 glass rounded-[32px] border border-white/5">
-                                                <div className="flex items-center gap-5">
-                                                    <div className="w-14 h-14 bg-pink-500 rounded-2xl flex items-center justify-center shadow-lg"><Lucide.Video size={28} /></div>
-                                                    <div>
-                                                        <div className="font-black text-sm tracking-tight">ChowTok</div>
-                                                        <div className="text-[10px] opacity-30 font-black uppercase tracking-widest">Viral Social</div>
-                                                    </div>
-                                                </div>
-                                                <button className="bg-white/10 px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest">Installed</button>
-                                            </div>
-                                            <div className="flex items-center justify-between p-5 glass rounded-[32px] border border-white/5">
-                                                <div className="flex items-center gap-5">
-                                                    <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg"><Lucide.Zap size={28} /></div>
-                                                    <div>
-                                                        <div className="font-black text-sm tracking-tight">Chow AI</div>
-                                                        <div className="text-[10px] opacity-30 font-black uppercase tracking-widest">Neural Net</div>
-                                                    </div>
-                                                </div>
-                                                <button className="bg-white/10 px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest">Installed</button>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {phoneApp === 'chat' && (
-                                        <div className="flex flex-col items-center justify-center py-28 opacity-20 text-center">
-                                            <Lucide.MessageSquare size={64} className="mb-6" />
-                                            <p className="font-black uppercase tracking-widest text-xs">Signal Encrypted</p>
-                                            <p className="text-[10px] mt-2 italic">Zero incoming data packets.</p>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
-            </main>
-
-            {/* Global Bottom Navigation Shell */}
-            <nav className="fixed bottom-0 left-0 right-0 glass pb-12 pt-5 px-8 z-50 border-t border-white/5">
-                <div className="flex justify-between items-end max-w-md mx-auto">
-                    <NavBtn icon={Lucide.GraduationCap} label="Academy" id="academy" />
-                    {state.assets.phone && (
-                        <NavBtn icon={Lucide.Smartphone} label="Phone" id="phone" onClick={() => { setView('phone'); setPhoneApp(null); }} />
-                    )}
-                    <NavBtn icon={Lucide.LayoutGrid} label="Home" id="home" />
-                    <NavBtn icon={Lucide.ShoppingCart} label="Shop" id="shop" />
-                    <NavBtn icon={Lucide.UserCircle} label="Profile" id="profile" />
-                </div>
-            </nav>
-        </div>
-    );
-}
-
-const rootElement = document.getElementById('root');
-if (rootElement) {
-    const root = ReactDOM.createRoot(rootElement);
-    root.render(<App />);
-}
-
-
-
+        ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+    </script>
+</body>
+</html>
 
 
