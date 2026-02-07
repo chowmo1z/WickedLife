@@ -18,6 +18,7 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             margin: 0;
             padding: 0;
+            padding-bottom: env(safe-area-inset-bottom);
         }
         input { -webkit-user-select: text; user-select: text; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -26,19 +27,21 @@
             50% { opacity: 0.8; transform: rotate(12deg) scale(0.98); }
         }
         .animate-pulse-slow { animation: pulse-slow 3s infinite ease-in-out; }
+        .app-icon-shadow { box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
     </style>
 </head>
 <body>
     <div id="root"></div>
     <script type="module">
-        import React, { useState, useEffect, useMemo } from 'https://esm.sh/react@^19.2.4';
-        import ReactDOM from 'https://esm.sh/react-dom@^19.2.4/client';
+        import React, { useState, useEffect } from 'https://esm.sh/react@18.2.0';
+        import ReactDOM from 'https://esm.sh/react-dom@18.2.0/client';
         import htm from 'https://esm.sh/htm';
-        import * as Lucide from 'https://esm.sh/lucide-react@^0.475.0';
+        import * as Lucide from 'https://esm.sh/lucide-react@0.263.1';
 
         const html = htm.bind(React.createElement);
 
-        // --- CONSTANTS ---
+        // --- GAME DATA ---
+        
         const CHAIN_COLORS = {
             copper: '#b87333', coal: '#2c2c2c', silver: '#e4e4e7', gold: '#fbbf24',
             platinum: '#e0f2fe', emerald: '#10b981', ruby: '#ef4444', sapphire: '#3b82f6',
@@ -46,11 +49,17 @@
             rainbow: 'linear-gradient(45deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3)'
         };
 
-        const SUBJECTS = ['math', 'science', 'art', 'history', 'geography', 'physics', 'chemistry', 'biology', 'computing', 'english', 'business', 'music'];
+        const SUBJECTS = [
+            'math', 'science', 'art', 'history', 'geography', 'physics', 
+            'chemistry', 'biology', 'computing', 'english', 'business', 'music'
+        ];
 
         const JOBS = [
+            { id: 'beggar', title: 'Beggar', salary: 10, minAge: 6 },
+            { id: 'paper', title: 'Paper Round', salary: 30, minAge: 10 },
             { id: 'burger', title: 'Burger Flipper', salary: 80, minAge: 14 },
-            { id: 'sales', title: 'Sales Assistant', salary: 200, minAge: 16, reqSubject: 'math', reqLevel: 20 },
+            { id: 'sales', title: 'Retail Assistant', salary: 200, minAge: 16, reqSubject: 'math', reqLevel: 20 },
+            { id: 'barista', title: 'Barista', salary: 250, minAge: 16, reqSubject: 'english', reqLevel: 20 },
             { id: 'artist', title: 'Graphic Artist', salary: 400, minAge: 18, reqSubject: 'art', reqLevel: 60 },
             { id: 'lab', title: 'Lab Technician', salary: 450, minAge: 18, reqSubject: 'science', reqLevel: 60 },
             { id: 'author', title: 'Author', salary: 600, minAge: 18, reqSubject: 'english', reqLevel: 100 },
@@ -59,36 +68,69 @@
             { id: 'pharm', title: 'Pharmacist', salary: 850, minAge: 21, reqSubject: 'chemistry', reqLevel: 100 },
             { id: 'math', title: 'Mathematician', salary: 900, minAge: 22, reqSubject: 'math', reqLevel: 120 },
             { id: 'dev', title: 'Senior Developer', salary: 1200, minAge: 21, reqSubject: 'computing', reqLevel: 100 },
-            { id: 'doc', title: 'Surgeon', salary: 1500, minAge: 24, reqSubject: 'biology', reqLevel: 120 },
-            { id: 'ceo', title: 'CEO', salary: 2500, minAge: 30, reqSubject: 'business', reqLevel: 120 },
+            { id: 'pilot', title: 'Airline Pilot', salary: 1400, minAge: 24, reqSubject: 'geography', reqLevel: 100 },
+            { id: 'doc', title: 'Surgeon', salary: 1800, minAge: 26, reqSubject: 'biology', reqLevel: 120 },
+            { id: 'lawyer', title: 'Lawyer', salary: 2000, minAge: 26, reqSubject: 'history', reqLevel: 120 },
+            { id: 'ceo', title: 'CEO', salary: 3500, minAge: 30, reqSubject: 'business', reqLevel: 120 },
         ];
 
         const PHONES = [
+            { name: "Nokia Brick", price: 50, model: '1' },
             { name: "iPhone 2G", price: 100, model: '1' },
+            { name: "iPhone 3G", price: 150, model: '1' },
+            { name: "iPhone 4", price: 200, model: '1' },
+            { name: "iPhone 5", price: 300, model: '6' },
             { name: "iPhone 6", price: 400, model: '6' },
-            { name: "Samsung S20", price: 600, model: 's20' },
-            { name: "iPhone X", price: 800, model: 'X' },
-            { name: "Samsung S24", price: 1400, model: 's24' },
-            { name: "iPhone 15 Pro Max", price: 2500, model: '15' },
-            { name: "Samsung S26 Ultra", price: 4500, model: 's26_ultra' },
-            { name: "iPhone 18 Pro Max", price: 35000, model: '18_pro_max' },
+            { name: "Samsung S8", price: 450, model: 's20' },
+            { name: "iPhone 8 Plus", price: 500, model: '8' },
+            { name: "iPhone X", price: 600, model: 'X' },
+            { name: "Samsung S20", price: 700, model: 's20' },
+            { name: "iPhone 11", price: 800, model: '11' },
+            { name: "iPhone 12 Pro", price: 900, model: '12' },
+            { name: "iPhone 13 Pro", price: 1000, model: '12' },
+            { name: "Samsung S22 Ultra", price: 1100, model: 's20' },
+            { name: "iPhone 14 Pro Max", price: 1200, model: '15' },
+            { name: "iPhone 15 Pro Max", price: 1400, model: '15' },
+            { name: "Samsung S24 Ultra", price: 1500, model: 's24' },
+            { name: "iPhone 16 Pro Max", price: 1800, model: '15' },
+            { name: "Samsung S25 Ultra", price: 2200, model: 's26_ultra' },
+            { name: "iPhone 17 Pro Max", price: 2800, model: '17_pro_max' },
+            { name: "iPhone 18 Ultra", price: 5000, model: '18_pro_max' },
         ];
 
         const CARS = [
+            { name: "Bicycle", price: 100, color: "#555" },
             { name: "Rusty Sedan", price: 500, color: "#8B4513" },
             { name: "Toyota Camry", price: 25000, color: "#C0C0C0" },
+            { name: "Honda Civic Type R", price: 40000, color: "#ff0000" },
             { name: "BMW M3", price: 60000, color: "#222" },
-            { name: "Mercedes Benz AMG", price: 500000, color: "#000000" },
-            { name: "Lamborghini Huracan", price: 200000, color: "#facc15" },
-            { name: "Bugatti Veyron", price: 1500000, color: "#3b82f6" },
+            { name: "Tesla Model S", price: 90000, color: "#fff" },
+            { name: "Porsche 911", price: 120000, color: "#facc15" },
+            { name: "Mercedes G-Wagon", price: 180000, color: "#111" },
+            { name: "Lamborghini Huracan", price: 250000, color: "#facc15" },
+            { name: "Ferrari F8", price: 300000, color: "#ef4444" },
+            { name: "Rolls Royce Phantom", price: 500000, color: "#000" },
+            { name: "Bugatti Chiron", price: 3000000, color: "#3b82f6" },
         ];
 
         const HOUSES = [
-            { name: "Cardboard Box", price: 0, rent: 0 },
-            { name: "Flat", price: 50000, rent: 250 },
-            { name: "Townhouse", price: 180000, rent: 600 },
-            { name: "Mansion", price: 2000000, rent: 5000 },
-            { name: "Private Island", price: 50000000, rent: 100000 },
+            { name: "Cardboard Box", price: 0, rent: 0, type: 'rented' },
+            { name: "Shared Room", price: 0, rent: 100, type: 'rented' },
+            { name: "Studio Apartment", price: 80000, rent: 400, type: 'owned' },
+            { name: "2-Bed Flat", price: 150000, rent: 800, type: 'owned' },
+            { name: "Suburban House", price: 350000, rent: 1500, type: 'owned' },
+            { name: "Penthouse Suite", price: 1000000, rent: 4000, type: 'owned' },
+            { name: "Beverly Hills Mansion", price: 5000000, rent: 15000, type: 'owned' },
+            { name: "Private Island", price: 50000000, rent: 0, type: 'owned' },
+        ];
+
+        const ACTIVITIES = [
+            { id: 'gym', name: 'Go to Gym', cost: 20, happy: 5, health: 5, icon: Lucide.Dumbbell },
+            { id: 'library', name: 'Visit Library', cost: 0, happy: 2, health: 0, icon: Lucide.Book },
+            { id: 'club', name: 'Nightclub', cost: 100, happy: 15, health: -2, icon: Lucide.Music },
+            { id: 'concert', name: 'Concert', cost: 200, happy: 25, health: 0, icon: Lucide.Mic2 },
+            { id: 'vacation', name: 'Luxury Vacation', cost: 2000, happy: 50, health: 10, icon: Lucide.Plane },
+            { id: 'plastic', name: 'Plastic Surgery', cost: 5000, happy: 60, health: 0, icon: Lucide.Sparkles },
         ];
 
         const THEMES = [
@@ -103,19 +145,20 @@
             hasStarted: false, name: "Player", gender: 'male', money: 500, age: 11, week: 1,
             health: 100, happiness: 100, jail: 0, themeColor: 'black', job: null, jobSalary: 0,
             education: { primary: 0, secondary: 0, math: 0, science: 0, art: 0, history: 0, geography: 0, physics: 0, chemistry: 0, biology: 0, computing: 0, english: 0, business: 0, music: 0 },
-            assets: { house: { name: "Parents' House", type: 'family', cost: 0 }, car: null, chain: null, phone: null },
+            assets: { house: { name: "Parents' House", type: 'family', cost: 0, rent: 0 }, car: null, chain: null, phone: null },
             chowtok: { followers: 0, likes: 0 },
-            logs: [{ id: 'init', message: "Chow Sim iOS 26 version started.", week: 1, type: 'success' }]
+            logs: [{ id: 'init', message: "Welcome to Life Sim iOS 26.", week: 1, type: 'success' }]
         };
 
-        // --- COMPONENTS ---
+        // --- UI COMPONENTS ---
+        
         const ProgressBar = ({ value, max, color }) => html`
-            <div className="h-2 bg-zinc-800 rounded-full overflow-hidden w-full">
-                <div className="h-full transition-all duration-500" style=${{ width: `${(value / max) * 100}%`, backgroundColor: color }} />
+            <div className="h-2 bg-zinc-800 rounded-full overflow-hidden w-full shadow-inner">
+                <div className="h-full transition-all duration-500" style=${{ width: `${Math.min(100, (value / max) * 100)}%`, backgroundColor: color }} />
             </div>
         `;
 
-        const ActionButton = ({ label, subLabel, cost, costColor = 'neutral', icon: Icon, onClick, variant = 'default', className = '' }) => {
+        const ActionButton = ({ label, subLabel, cost, costColor = 'neutral', icon: Icon, onClick, variant = 'default', className = '', disabled = false }) => {
             const variants = {
                 default: "bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-white",
                 danger: "bg-red-900/20 border-red-900/50 text-red-100",
@@ -124,7 +167,7 @@
             };
             const cColors = { green: "text-emerald-400", red: "text-rose-400", neutral: "text-zinc-400" };
             return html`
-                <button onClick=${onClick} className=${`w-full p-4 rounded-2xl border flex items-center justify-between active:scale-[0.98] transition-transform ${variants[variant]} ${className}`}>
+                <button onClick=${onClick} disabled=${disabled} className=${`w-full p-4 rounded-2xl border flex items-center justify-between active:scale-[0.98] transition-transform ${variants[variant]} ${className} ${disabled ? 'opacity-50 grayscale' : ''}`}>
                     <div className="flex items-center gap-3 text-left">
                         ${Icon && html`<${Icon} size=${20} className="text-zinc-500" />`}
                         <div>
@@ -132,10 +175,19 @@
                             ${subLabel && html`<div className="text-[10px] text-zinc-500 uppercase font-black tracking-widest">${subLabel}</div>`}
                         </div>
                     </div>
-                    ${cost && html`<div className=${`font-black text-xs ${cColors[costColor]}`}>${cost}</div>`}
+                    ${cost !== undefined && html`<div className=${`font-black text-xs ${cColors[costColor]}`}>${typeof cost === 'number' ? `£${cost.toLocaleString()}` : cost}</div>`}
                 </button>
             `;
         };
+
+        const AppIcon = ({ icon: Icon, label, color, onClick }) => html`
+            <button onClick=${onClick} className="flex flex-col items-center gap-2 group active:scale-90 transition-all duration-200">
+                <div className=${`w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg app-icon-shadow ${color}`}>
+                    <${Icon} size=${28} strokeWidth=${2} />
+                </div>
+                <span className="text-[10px] font-medium text-zinc-300 group-hover:text-white transition-colors">${label}</span>
+            </button>
+        `;
 
         const CharacterVisual = ({ chain, phone, gender }) => {
             const chainStyle = chain ? CHAIN_COLORS[chain] : 'transparent';
@@ -174,17 +226,23 @@
             `;
         };
 
-        // --- APP ---
+        // --- APP LOGIC ---
+        
         function App() {
             const [state, setState] = useState(() => {
-                const saved = localStorage.getItem('lifeSimState_v3');
-                return saved ? JSON.parse(saved) : INITIAL_STATE;
+                try {
+                    const saved = localStorage.getItem('lifeSimState_v5');
+                    return saved ? JSON.parse(saved) : INITIAL_STATE;
+                } catch(e) {
+                    return INITIAL_STATE;
+                }
             });
-            const [view, setView] = useState('home');
+            const [view, setView] = useState('home'); 
+            const [storeTab, setStoreTab] = useState('goods'); 
             const [showSettings, setShowSettings] = useState(false);
             const [thiefTab, setThiefTab] = useState('phones');
 
-            useEffect(() => localStorage.setItem('lifeSimState_v3', JSON.stringify(state)), [state]);
+            useEffect(() => localStorage.setItem('lifeSimState_v5', JSON.stringify(state)), [state]);
 
             const addLog = (msg, type = 'neutral') => {
                 setState(p => ({ ...p, logs: [{ id: Math.random().toString(), message: msg, week: p.week, type }, ...p.logs].slice(0, 30) }));
@@ -195,10 +253,24 @@
                     const nextWeek = prev.week + 1;
                     const nextAge = nextWeek > 52 ? prev.age + 1 : prev.age;
                     const displayWeek = nextWeek > 52 ? 1 : nextWeek;
+                    
                     if (prev.jail > 0) return { ...prev, jail: prev.jail - 1, week: displayWeek, age: nextAge, happiness: Math.max(0, prev.happiness - 3) };
+                    
                     let income = (prev.age >= 11 && prev.age < 18 ? 20 : 0) + (prev.jobSalary || 0);
-                    let expenses = prev.assets.house.type === 'rented' ? prev.assets.house.cost : 0;
-                    return { ...prev, week: displayWeek, age: nextAge, money: prev.money + income - expenses };
+                    let expenses = 0;
+                    if (prev.assets.house.rent) expenses += prev.assets.house.rent;
+                    
+                    const newHealth = Math.max(0, prev.health - (prev.age > 50 ? 2 : 0));
+                    const newHappy = Math.max(0, prev.happiness - 1);
+
+                    return { 
+                        ...prev, 
+                        week: displayWeek, 
+                        age: nextAge, 
+                        money: prev.money + income - expenses,
+                        health: newHealth,
+                        happiness: newHappy
+                    };
                 });
             };
 
@@ -208,18 +280,51 @@
                 if (!isBasic && state.education.secondary < 60) return addLog("Graduate high school first", 'danger');
                 const cost = isBasic ? 0 : 10;
                 if (state.money < cost) return addLog("No money", 'danger');
-                setState(p => ({ ...p, money: p.money - cost, education: { ...p.education, [sub]: Math.min(120, p.education[sub] + 2) } }));
+                
+                setState(p => ({ ...p, money: p.money - cost, education: { ...p.education, [sub]: Math.min(120, p.education[sub] + 2) }, happiness: Math.max(0, p.happiness - 1) }));
             };
 
             const steal = (type, item) => {
                 const chance = item.price <= 200 ? 95 : item.price <= 1000 ? 80 : item.price <= 50000 ? 50 : 15;
                 if (Math.random() * 100 < chance) {
-                    setState(p => ({ ...p, assets: { ...p.assets, [type]: type === 'house' ? { ...item, type: 'owned', cost: item.price } : item }, happiness: 100 }));
+                    setState(p => ({ ...p, assets: { ...p.assets, [type]: type === 'house' ? { ...item, type: 'owned', cost: item.price, rent: 0 } : item }, happiness: 100 }));
                     addLog(`Successfully stole ${item.name}`, 'success');
                 } else {
                     setState(p => ({ ...p, jail: 12, job: null, jobSalary: 0, happiness: 0 }));
                     addLog("Caught! Sent to prison for 12 weeks", 'danger');
                 }
+            };
+
+            const buy = (category, item) => {
+                if (state.money < item.price) return addLog("Insufficient funds", 'danger');
+                setState(p => ({ 
+                    ...p, 
+                    money: p.money - item.price, 
+                    assets: { ...p.assets, [category]: category === 'house' ? { ...item, type: 'owned', cost: item.price, rent: 0 } : item },
+                    happiness: Math.min(100, p.happiness + 10)
+                }));
+                addLog(`Purchased ${item.name}`, 'success');
+            };
+
+            const rentHouse = (item) => {
+                if (state.money < item.rent * 4) return addLog("Need 4 weeks rent upfront", 'danger');
+                setState(p => ({
+                    ...p,
+                    assets: { ...p.assets, house: { ...item, type: 'rented' } },
+                    happiness: Math.min(100, p.happiness + 5)
+                }));
+                addLog(`Rented ${item.name}`, 'success');
+            };
+
+            const doActivity = (act) => {
+                if (state.money < act.cost) return addLog("Too expensive", 'danger');
+                setState(p => ({
+                    ...p,
+                    money: p.money - act.cost,
+                    happiness: Math.min(100, p.happiness + act.happy),
+                    health: Math.min(100, p.health + act.health)
+                }));
+                addLog(act.name, 'success');
             };
 
             const applyJob = (j) => {
@@ -230,6 +335,8 @@
             };
 
             const getTheftChance = (price) => price <= 200 ? 95 : price <= 1000 ? 80 : price <= 50000 ? 50 : 15;
+
+            // --- VIEW RENDER ---
 
             if (!state.hasStarted) {
                 return html`
@@ -259,10 +366,21 @@
                 `;
             }
 
+            if (state.health <= 0) {
+                return html`
+                    <div className="min-h-screen bg-black flex flex-col items-center justify-center p-8 text-center">
+                        <${Lucide.Skull} size=${80} className="text-red-600 mb-6" />
+                        <h1 className="text-5xl font-black text-white mb-2 uppercase tracking-tighter">Wasted</h1>
+                        <p className="text-zinc-500 font-bold mb-10">You didn't look after yourself.</p>
+                        <button onClick=${() => {localStorage.removeItem('lifeSimState_v5'); window.location.reload();}} className="w-full max-w-xs bg-white text-black font-black py-5 rounded-3xl">New Life</button>
+                    </div>
+                `;
+            }
+
             const bgStyles = { black: 'bg-black', white: 'bg-zinc-100', grey: 'bg-zinc-800', blue: 'bg-blue-900', green: 'bg-green-950' };
 
             return html`
-                <div className=${`min-h-screen transition-all duration-700 ${bgStyles[state.themeColor]} pb-32`}>
+                <div className=${`min-h-screen transition-all duration-700 ${bgStyles[state.themeColor]} pb-32 select-none`}>
                     <header className="sticky top-0 z-50 backdrop-blur-3xl border-b border-white/5 p-5 pt-12 bg-black/40">
                         <div className="flex justify-between items-center mb-4">
                             <h1 className="font-black text-2xl tracking-tighter">${state.name}</h1>
@@ -280,23 +398,28 @@
 
                     <main className="max-w-md mx-auto p-4 space-y-6">
                         ${view === 'home' && html`
-                            <div className="space-y-4">
+                            <div className="space-y-6">
+                                <div className="grid grid-cols-4 gap-6 p-2 mb-4">
+                                    <${AppIcon} icon=${Lucide.GraduationCap} label="School" color="bg-orange-500" onClick=${() => setView('edu')} />
+                                    <${AppIcon} icon=${Lucide.Briefcase} label="Jobs" color="bg-blue-500" onClick=${() => setView('jobs')} />
+                                    <${AppIcon} icon=${Lucide.ShoppingBag} label="Phones" color="bg-yellow-500" onClick=${() => { setView('store'); setStoreTab('goods'); }} />
+                                    <${AppIcon} icon=${Lucide.Car} label="Motors" color="bg-zinc-600" onClick=${() => { setView('store'); setStoreTab('auto'); }} />
+                                    <${AppIcon} icon=${Lucide.Home} label="Estates" color="bg-green-500" onClick=${() => { setView('store'); setStoreTab('estate'); }} />
+                                    <${AppIcon} icon=${Lucide.Diamond} label="Luxe" color="bg-purple-500" onClick=${() => { setView('store'); setStoreTab('luxe'); }} />
+                                    <${AppIcon} icon=${Lucide.Heart} label="Wellness" color="bg-red-500" onClick=${() => { setView('store'); setStoreTab('wellness'); }} />
+                                    <${AppIcon} icon=${Lucide.Smartphone} label="Social" color="bg-pink-500" onClick=${() => { setView('store'); setStoreTab('social'); }} />
+                                    <${AppIcon} icon=${Lucide.User} label="Profile" color="bg-cyan-500" onClick=${() => setView('profile')} />
+                                    <${AppIcon} icon=${Lucide.Skull} label="Dark Web" color="bg-zinc-800" onClick=${() => setView('thief')} />
+                                </div>
                                 <div className="p-8 rounded-[40px] bg-white text-black shadow-xl">
                                     <div className="text-[10px] font-black opacity-50 mb-1 uppercase tracking-widest">Net Worth</div>
-                                    <div className="text-5xl font-black tracking-tighter">£${(state.money + (state.assets.house.cost || 0)).toLocaleString()}</div>
+                                    <div className="text-4xl font-black tracking-tighter">£${(state.money + (state.assets.house.type === 'owned' ? state.assets.house.cost : 0) + (state.assets.car?.price || 0)).toLocaleString()}</div>
                                 </div>
-                                <button onClick=${() => setView('thief')} className="w-full p-8 rounded-[40px] bg-red-600/10 border border-red-600/20 flex items-center gap-6 group active:scale-[0.98] transition-all">
-                                    <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center text-red-500"><${Lucide.Skull} size=${32}/></div>
-                                    <div className="text-left">
-                                        <div className="font-black text-xl">Black Market</div>
-                                        <div className="text-xs font-bold opacity-50 uppercase tracking-widest">High Stakes Heist</div>
-                                    </div>
-                                </button>
                                 <div className="space-y-2">
                                     ${state.logs.map(log => html`
-                                        <div key=${log.id} className="p-4 bg-zinc-900/50 rounded-2xl flex items-center gap-4 animate-in slide-in-from-left duration-300">
+                                        <div key=${log.id} className="p-4 bg-zinc-900/50 rounded-2xl flex items-center gap-4 animate-in slide-in-from-left duration-300 border border-white/5">
                                             <div className=${`w-2 h-2 rounded-full ${log.type === 'success' ? 'bg-green-500' : log.type === 'danger' ? 'bg-red-500' : 'bg-zinc-500'}`} />
-                                            <span className="text-sm font-bold text-zinc-300">${log.message}</span>
+                                            <span className="text-xs font-bold text-zinc-300">${log.message}</span>
                                         </div>
                                     `)}
                                 </div>
@@ -327,6 +450,7 @@
 
                         ${view === 'edu' && html`
                             <div className="space-y-8">
+                                <div className="flex items-center gap-4"><button onClick=${() => setView('home')}><${Lucide.ArrowLeft}/></button><h2 className="text-3xl font-black">Education</h2></div>
                                 <section>
                                     <h3 className="text-xs font-black uppercase tracking-widest opacity-40 mb-4">Core Schooling</h3>
                                     <div className="space-y-3">
@@ -343,7 +467,7 @@
                                     </div>
                                 </section>
                                 <section>
-                                    <h3 className="text-xs font-black uppercase tracking-widest opacity-40 mb-4">Specialized Subjects</h3>
+                                    <h3 className="text-xs font-black uppercase tracking-widest opacity-40 mb-4">University Subjects</h3>
                                     <div className="grid gap-2">
                                         ${SUBJECTS.map(sub => html`
                                             <${ActionButton} key=${sub} label=${sub.charAt(0).toUpperCase() + sub.slice(1)} subLabel="Knowledge Expansion" cost="£10" costColor="red" onClick=${() => study(sub)} variant=${state.education[sub] >= 120 ? 'success' : 'default'} />
@@ -355,7 +479,7 @@
 
                         ${view === 'jobs' && html`
                             <div className="space-y-4">
-                                <div className="flex justify-between items-center mb-2"><h2 className="text-3xl font-black">Careers</h2>${state.job && html`<button onClick=${() => setState(p => ({...p, job: null, jobSalary: 0}))} className="text-[10px] font-black text-red-400 uppercase tracking-widest border border-red-500/20 px-4 py-2 rounded-full">Resign</button>`}</div>
+                                <div className="flex justify-between items-center mb-2"><div className="flex items-center gap-4"><button onClick=${() => setView('home')}><${Lucide.ArrowLeft}/></button><h2 className="text-3xl font-black">Careers</h2></div>${state.job && html`<button onClick=${() => setState(p => ({...p, job: null, jobSalary: 0}))} className="text-[10px] font-black text-red-400 uppercase tracking-widest border border-red-500/20 px-4 py-2 rounded-full">Resign</button>`}</div>
                                 ${JOBS.map(j => html`
                                     <div className=${`p-6 rounded-[32px] border transition-all ${state.job === j.title ? 'bg-blue-600/20 border-blue-500' : 'bg-zinc-900/40 border-white/5'}`}>
                                         <div className="flex justify-between items-start mb-4">
@@ -376,87 +500,142 @@
                         `}
 
                         ${view === 'store' && html`
-                            <div className="space-y-8">
-                                <div className="flex gap-2 p-2 bg-zinc-900/50 rounded-2xl">
-                                    ${['store', 'chains', 'social'].map(v => html`
-                                        <button onClick=${() => setView(v)} className=${`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest ${view === v ? 'bg-white text-black' : 'text-zinc-500'}`}>${v}</button>
-                                    `)}
-                                </div>
-                                <section>
-                                    <h3 className="text-xs font-black uppercase tracking-widest opacity-40 mb-4">Latest Tech</h3>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        ${PHONES.slice().reverse().map(p => html`
-                                            <button onClick=${() => setState(p_ => ({...p_, money: p_.money - p.price, assets: {...p_.assets, phone: p}}))} className="p-5 bg-zinc-900/40 rounded-3xl border border-white/5 text-left active:scale-[0.98]">
-                                                <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center mb-4"><${Lucide.Smartphone} size=${20} /></div>
-                                                <div className="font-black text-sm">${p.name}</div>
-                                                <div className="text-green-400 font-bold text-xs uppercase">£${p.price.toLocaleString()}</div>
-                                            </button>
+                            <div className="space-y-6">
+                                <div className="flex items-center gap-4"><button onClick=${() => setView('home')}><${Lucide.ArrowLeft}/></button><h2 className="text-3xl font-black">Store</h2></div>
+                                <div className="overflow-x-auto pb-4 no-scrollbar">
+                                    <div className="flex gap-2 p-2 bg-zinc-900/50 rounded-2xl w-max">
+                                        ${['goods', 'auto', 'estate', 'luxe', 'social', 'wellness'].map(v => html`
+                                            <button onClick=${() => setStoreTab(v)} className=${`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${storeTab === v ? 'bg-white text-black scale-105' : 'text-zinc-500'}`}>${v}</button>
                                         `)}
                                     </div>
-                                </section>
-                                <section>
-                                    <h3 className="text-xs font-black uppercase tracking-widest opacity-40 mb-4">Motor Vehicles</h3>
-                                    <div className="space-y-3">
-                                        ${CARS.map(c => html`
-                                            <button onClick=${() => setState(p_ => ({...p_, money: p_.money - c.price, assets: {...p_.assets, car: c}}))} className="w-full p-6 bg-zinc-900/40 rounded-[32px] border border-white/5 flex justify-between items-center active:scale-[0.98]">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="w-3 h-10 rounded-full" style=${{ backgroundColor: c.color }} />
-                                                    <div className="font-black text-lg">${c.name}</div>
+                                </div>
+
+                                ${storeTab === 'goods' && html`
+                                    <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                        <h3 className="text-xs font-black uppercase tracking-widest opacity-40 mb-4">Electronics</h3>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            ${PHONES.map(p => html`
+                                                <button onClick=${() => buy('phone', p)} className="p-5 bg-zinc-900/40 rounded-3xl border border-white/5 text-left active:scale-[0.98] transition-transform">
+                                                    <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center mb-4"><${Lucide.Smartphone} size=${20} /></div>
+                                                    <div className="font-black text-sm">${p.name}</div>
+                                                    <div className="text-green-400 font-bold text-xs uppercase">£${p.price.toLocaleString()}</div>
+                                                </button>
+                                            `)}
+                                        </div>
+                                    </section>
+                                `}
+
+                                ${storeTab === 'auto' && html`
+                                    <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                        <h3 className="text-xs font-black uppercase tracking-widest opacity-40 mb-4">Dealership</h3>
+                                        <div className="space-y-3">
+                                            ${CARS.map(c => html`
+                                                <button onClick=${() => buy('car', c)} className="w-full p-6 bg-zinc-900/40 rounded-[32px] border border-white/5 flex justify-between items-center active:scale-[0.98]">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="w-3 h-10 rounded-full shadow-lg" style=${{ backgroundColor: c.color }} />
+                                                        <div className="font-black text-lg text-left">${c.name}</div>
+                                                    </div>
+                                                    <div className="font-black text-green-400 uppercase tracking-widest text-xs">£${c.price.toLocaleString()}</div>
+                                                </button>
+                                            `)}
+                                        </div>
+                                    </section>
+                                `}
+
+                                ${storeTab === 'estate' && html`
+                                    <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                        <h3 className="text-xs font-black uppercase tracking-widest opacity-40 mb-4">Properties</h3>
+                                        <div className="space-y-3">
+                                            ${HOUSES.filter(h => h.price > 0).map(h => html`
+                                                <div className="p-6 bg-zinc-900/40 rounded-[32px] border border-white/5">
+                                                    <div className="flex justify-between items-start mb-4">
+                                                        <div className="font-black text-xl text-left">${h.name}</div>
+                                                        <div className="text-right">
+                                                            <div className="font-black text-green-400 text-xs">£${h.price.toLocaleString()}</div>
+                                                            <div className="font-bold text-zinc-500 text-[10px]">Rent: £${h.rent}/wk</div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <button onClick=${() => rentHouse(h)} className="py-3 rounded-xl bg-zinc-800 text-zinc-300 font-black uppercase text-[10px]">Rent</button>
+                                                        <button onClick=${() => buy('house', h)} className="py-3 rounded-xl bg-white text-black font-black uppercase text-[10px]">Buy</button>
+                                                    </div>
                                                 </div>
-                                                <div className="font-black text-green-400 uppercase tracking-widest text-xs">£${c.price.toLocaleString()}</div>
-                                            </button>
-                                        `)}
-                                    </div>
-                                </section>
-                            </div>
-                        `}
+                                            `)}
+                                        </div>
+                                    </section>
+                                `}
 
-                        ${view === 'chains' && html`
-                            <div className="space-y-8">
-                                <div className="flex gap-2 p-2 bg-zinc-900/50 rounded-2xl">
-                                    ${['store', 'chains', 'social'].map(v => html`
-                                        <button onClick=${() => setView(v)} className=${`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest ${view === v ? 'bg-white text-black' : 'text-zinc-500'}`}>${v}</button>
-                                    `)}
-                                </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    ${Object.keys(CHAIN_COLORS).map(type => html`
-                                        <button onClick=${() => setState(p_ => ({...p_, assets: {...p_.assets, chain: type}}))} className="p-6 bg-zinc-900/40 rounded-[32px] border border-white/5 flex flex-col items-center gap-4 active:scale-[0.98]">
-                                            <div className="w-16 h-16 rounded-full flex items-center justify-center shadow-lg" style=${{ background: CHAIN_COLORS[type] }}>
-                                                <${Lucide.Diamond} size=${28} color="white" />
-                                            </div>
-                                            <div className="text-center">
-                                                <div className="font-black uppercase tracking-widest text-xs">${type}</div>
-                                                <div className="text-zinc-500 font-bold text-[10px] uppercase">£500</div>
-                                            </div>
-                                        </button>
-                                    `)}
-                                </div>
-                            </div>
-                        `}
+                                ${storeTab === 'luxe' && html`
+                                    <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                        <h3 className="text-xs font-black uppercase tracking-widest opacity-40 mb-4">Jewelry</h3>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            ${Object.keys(CHAIN_COLORS).map(type => html`
+                                                <button onClick=${() => {
+                                                    const price = type === 'rainbow' ? 50000 : 500;
+                                                    if (state.money >= price) {
+                                                        setState(p_ => ({...p_, money: p_.money - price, assets: {...p_.assets, chain: type}, happiness: Math.min(100, p_.happiness + 5)}));
+                                                        addLog(`Bought ${type} chain`, 'success');
+                                                    } else {
+                                                        addLog("Too expensive", 'danger');
+                                                    }
+                                                }} className="p-6 bg-zinc-900/40 rounded-[32px] border border-white/5 flex flex-col items-center gap-4 active:scale-[0.98]">
+                                                    <div className="w-16 h-16 rounded-full flex items-center justify-center shadow-lg" style=${{ background: CHAIN_COLORS[type] }}>
+                                                        <${Lucide.Diamond} size=${28} color="white" />
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <div className="font-black uppercase tracking-widest text-xs">${type}</div>
+                                                        <div className="text-zinc-500 font-bold text-[10px] uppercase">£${type === 'rainbow' ? '50,000' : '500'}</div>
+                                                    </div>
+                                                </button>
+                                            `)}
+                                        </div>
+                                    </section>
+                                `}
 
-                        ${view === 'social' && html`
-                            <div className="space-y-8">
-                                <div className="flex gap-2 p-2 bg-zinc-900/50 rounded-2xl">
-                                    ${['store', 'chains', 'social'].map(v => html`
-                                        <button onClick=${() => setView(v)} className=${`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest ${view === v ? 'bg-white text-black' : 'text-zinc-500'}`}>${v}</button>
-                                    `)}
-                                </div>
-                                <div className="bg-zinc-900 p-8 rounded-[40px] border border-white/5 flex flex-col items-center">
-                                    <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-pink-500 to-yellow-500 p-1 mb-6">
-                                        <div className="w-full h-full rounded-full bg-black flex items-center justify-center"><${Lucide.Video} size=${40}/></div>
-                                    </div>
-                                    <h3 className="text-2xl font-black mb-1">ChowTok Growth</h3>
-                                    <p className="text-xs font-bold opacity-40 uppercase tracking-widest mb-10 text-center">Increase your social influence</p>
-                                    <div className="w-full space-y-3">
-                                        <${ActionButton} label="10,000 Followers" cost="£1,000" costColor="red" onClick=${() => addLog("Bought 10k followers")} />
-                                        <${ActionButton} label="Viral Video Boost" cost="£2,500" costColor="red" variant="accent" onClick=${() => addLog("Video went viral")} />
-                                    </div>
-                                </div>
+                                ${storeTab === 'social' && html`
+                                    <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                        <div className="bg-zinc-900 p-8 rounded-[40px] border border-white/5 flex flex-col items-center">
+                                            <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-pink-500 to-yellow-500 p-1 mb-6">
+                                                <div className="w-full h-full rounded-full bg-black flex items-center justify-center"><${Lucide.Video} size=${40}/></div>
+                                            </div>
+                                            <h3 className="text-2xl font-black mb-1">ChowTok Growth</h3>
+                                            <p className="text-xs font-bold opacity-40 uppercase tracking-widest mb-10 text-center">Increase your social influence</p>
+                                            <div className="w-full space-y-3">
+                                                <${ActionButton} label="10,000 Followers" cost="£1,000" costColor="red" onClick=${() => {
+                                                    if(state.money >= 1000) { setState(p => ({...p, money: p.money-1000, chowtok: {...p.chowtok, followers: p.chowtok.followers + 10000}})); addLog("Bought 10k followers", 'success'); }
+                                                }} />
+                                                <${ActionButton} label="Viral Video Boost" cost="£2,500" costColor="red" variant="accent" onClick=${() => {
+                                                    if(state.money >= 2500) { setState(p => ({...p, money: p.money-2500, chowtok: {...p.chowtok, likes: p.chowtok.likes + 50000}})); addLog("Video went viral!", 'success'); }
+                                                }} />
+                                            </div>
+                                        </div>
+                                    </section>
+                                `}
+
+                                ${storeTab === 'wellness' && html`
+                                    <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                        <h3 className="text-xs font-black uppercase tracking-widest opacity-40 mb-4">Activities & Health</h3>
+                                        <div className="grid gap-3">
+                                            ${ACTIVITIES.map(act => html`
+                                                <${ActionButton} 
+                                                    key=${act.id} 
+                                                    label=${act.name} 
+                                                    icon=${act.icon} 
+                                                    cost=${`£${act.cost}`} 
+                                                    costColor="red" 
+                                                    subLabel=${`+${act.happy} Happy ${act.health !== 0 ? `, ${act.health > 0 ? '+' : ''}${act.health} Health` : ''}`}
+                                                    onClick=${() => doActivity(act)} 
+                                                />
+                                            `)}
+                                        </div>
+                                    </section>
+                                `}
                             </div>
                         `}
 
                         ${view === 'profile' && html`
                             <div className="space-y-6">
+                                <div className="flex items-center gap-4"><button onClick=${() => setView('home')}><${Lucide.ArrowLeft}/></button><h2 className="text-3xl font-black">Identity</h2></div>
                                 <div className="bg-zinc-900/40 backdrop-blur-3xl p-10 rounded-[60px] border border-white/10 flex flex-col items-center shadow-2xl">
                                     <${CarVisual} car=${state.assets.car} />
                                     <div className="mt-[-40px]">
@@ -474,9 +653,16 @@
                                             <div className="text-[10px] font-black opacity-30 uppercase tracking-widest mb-1">Residence</div>
                                             <div className="text-sm font-bold truncate">${state.assets.house.name}</div>
                                         </div>
+                                        <div className="p-5 bg-white/5 rounded-3xl border border-white/5 col-span-2 flex justify-between items-center">
+                                            <div>
+                                                <div className="text-[10px] font-black opacity-30 uppercase tracking-widest mb-1">Social</div>
+                                                <div className="text-sm font-bold">${state.chowtok.followers.toLocaleString()} Followers</div>
+                                            </div>
+                                            <${Lucide.Video} className="opacity-20"/>
+                                        </div>
                                     </div>
                                     
-                                    <button onClick=${() => {localStorage.removeItem('lifeSimState_v3'); window.location.reload();}} className="mt-12 text-[10px] font-black text-red-500/50 uppercase tracking-[0.2em] hover:text-red-500 transition-colors">Terminate Life Protocol</button>
+                                    <button onClick=${() => {localStorage.removeItem('lifeSimState_v5'); window.location.reload();}} className="mt-12 text-[10px] font-black text-red-500/50 uppercase tracking-[0.2em] hover:text-red-500 transition-colors">Terminate Life Protocol</button>
                                 </div>
                             </div>
                         `}
@@ -506,7 +692,7 @@
                                 <${Lucide.Plus} size=${32} strokeWidth=${3} />
                             </button>
                             <NavBtn icon=${Lucide.Briefcase} label="Career" active=${view === 'jobs'} onClick=${() => setView('jobs')} />
-                            <NavBtn icon=${Lucide.DollarSign} label="Store" active=${['store', 'chains', 'social'].includes(view)} onClick=${() => setView('store')} />
+                            <NavBtn icon=${Lucide.ShoppingCart} label="Store" active=${view === 'store'} onClick=${() => setView('store')} />
                             <NavBtn icon=${Lucide.User} label="Profile" active=${view === 'profile'} onClick=${() => setView('profile')} />
                         </div>
                     </nav>
@@ -528,3 +714,13 @@
     </script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
